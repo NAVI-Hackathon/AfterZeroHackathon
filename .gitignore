@@ -44,3 +44,15 @@ next-env.d.ts
 !.env.example
 .venv/
 data/crawl/pdfs/
+
+# NAVI workspaces
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.DS_Store
+artifacts/
+
+.env.local
+apps/api/.env

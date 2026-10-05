@@ -1,0 +1,21 @@
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const root = new URL('../', import.meta.url);
+// Spawn Node directly so stopping development also stops Vite and the API watcher.
+const children = [
+  spawn(process.execPath, [fileURLToPath(new URL('node_modules/vite/bin/vite.js', root))], { cwd: fileURLToPath(new URL('apps/web', root)), stdio: 'inherit' }),
+  spawn(process.execPath, ['--env-file-if-exists=.env', '--watch', 'src/server.js'], { cwd: fileURLToPath(new URL('apps/api', root)), stdio: 'inherit' }),
+];
+let stopping = false;
+function stop(code = 0) {
+  if (stopping) return;
+  stopping = true;
+  for (const child of children) child.kill('SIGTERM');
+  process.exitCode = code;
+}
+for (const child of children) {
+  child.on('error', () => stop(1));
+  child.on('exit', code => stop(code || 0));
+}
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => stop());

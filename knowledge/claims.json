@@ -1,0 +1,13 @@
+{
+  "serviceType":"flight_delay",
+  "confidenceThreshold":0.7,
+  "readiness":[
+    {"id":"incident","label":"Incident information","weight":20},
+    {"id":"service","label":"Service identified","weight":15},
+    {"id":"travel","label":"Travel information","weight":15},
+    {"id":"boarding_pass","label":"Boarding pass","weight":20},
+    {"id":"delay_certificate","label":"Delay certificate","weight":20},
+    {"id":"confirmation","label":"Required information confirmed","weight":10}
+  ],
+  "disclaimer":"This service may be relevant to your situation. Coverage and any compensation are subject to policy terms and insurer review."
+}

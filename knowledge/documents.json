@@ -1,0 +1,10 @@
+{
+  "boarding_pass": {
+    "title":"Boarding pass", "requirement":"Proof of travel", "sampleName":"boarding-pass-demo.pdf", "confidence":0.97,
+    "fields":{"passengerName":"EN JU CHEN","flightNumber":"BR197","origin":"Tokyo","originCode":"NRT","destination":"Taipei","destinationCode":"TPE","departureDate":"2026-10-05"}
+  },
+  "delay_certificate": {
+    "title":"Delay certificate", "requirement":"Flight delay evidence", "sampleName":"delay-certificate-demo.pdf", "confidence":0.96,
+    "fields":{"flightNumber":"BR197","scheduledDeparture":"2026-10-05T14:20:00+09:00","actualDeparture":"2026-10-05T21:43:00+09:00"}
+  }
+}

@@ -1,0 +1,4 @@
+[
+  {"id":"claim-guide","title":"班機延誤理賠指南","type":"service_guide","section":"3.2 航班延誤 · 文件準備","content":"示範文件要求：以登機證確認旅行資訊，並以航空公司延誤證明確認延誤時間。實際需要的資料仍依適用保單與保險公司的要求為準。","url":null,"isMock":true},
+  {"id":"flight-faq","title":"班機延誤常見問題","type":"faq","section":"旅遊延誤服務 · 保障條件","content":"服務比對與準備度不代表符合理賠資格。保險公司須審核保單條款與相關文件後，才能判定理賠結果。","url":null,"isMock":true}
+]
