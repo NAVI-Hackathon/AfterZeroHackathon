@@ -1,0 +1,6 @@
+[
+  {"id":"flight_delay","title":"Flight delay","category":"Travel insurance","icon":"plane","stages":["Incident","Service match","Evidence","Review","Application"],"description":"Gather your travel details and delay evidence for insurer review."},
+  {"id":"car_accident","title":"Car accident","category":"Motor insurance","icon":"car","stages":["Incident","Service match","Accident details","Specialist review","Application"],"description":"Record the incident, prepare photos and an accident report, then speak with a specialist."},
+  {"id":"payment_change","title":"Change payment method","category":"Policy services","icon":"card","stages":["Request","Service match","Policy details","Verification","Update payment"],"description":"Locate your policy, verify your identity and update the payment method through your customer platform."},
+  {"id":"unknown","title":"Specialist assistance","category":"Service navigation","icon":"headset","stages":["Your request","Specialist review","Service match","Next steps"],"description":"A specialist can help identify the right service for your situation."}
+]
