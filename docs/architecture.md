@@ -114,3 +114,9 @@ Request bodies are limited to 16KB; invalid JSON, empty messages, wrong types an
 ## Phase 2B suggestion — not implemented
 
 After confirming Phase 2A and its real-provider QA, add a separate bounded document API and structured extraction schema. Validate signatures/size/type, extract actual fields, compare passenger/flight/date/route with case facts, show editable confirmation, and preserve deterministic readiness. Do not add RAG, MongoDB or agents simply to support two documents.
+
+## Repository integration: independent demo website
+
+`apps/mock-site` runs the collaborator's Next.js 16 / Tailwind mock insurance website on 127.0.0.1:3000. It owns its router, public assets, styles, PostCSS and TypeScript config. Its eight pages retain local seed validation, hash tabs and data-tour-id hooks. It imports root `data` and `lib/contracts` through explicit aliases; those original contracts are retained independently of NAVI's `shared/intelligence.js`.
+
+NAVI's `apps/web` (5173) and `apps/api` (3001) remain unchanged in responsibility. `/api` is only proxied by NAVI Vite. Root `npm run dev:all` starts three separate processes, and each site builds separately. No embedded NAVI assistant, cross-site case transport or external application submission was added. The demonstration switches browser tabs manually. The original SPEC describes a broader planned Next/OpenAI/Turso product; its scaffolding is preserved, not claimed as implemented.

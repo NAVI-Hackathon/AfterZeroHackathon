@@ -56,3 +56,12 @@ artifacts/
 
 .env.local
 apps/api/.env
+
+# Workspace build outputs and local editor settings
+**/.next/
+**/next-env.d.ts
+.idea/
+
+# Next dev generates local agent guidance; root team rules remain tracked.
+/apps/mock-site/AGENTS.md
+/apps/mock-site/CLAUDE.md

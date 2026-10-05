@@ -1,27 +1,94 @@
-# NAVI
+# AfterZeroHackathon · NAVI 與 Mock Website
 
-**AI Service Journey Navigator** · **Understand. Guide. Resolve.**
+此 Repository 包含兩個獨立網站：**NAVI 黑客松主產品**，以及 **Demo 用模擬保險官網**。兩者有各自的 routing、CSS、framework、build 與執行程序；不把模擬頁面嵌進 NAVI。
 
-NAVI 將使用者的需求轉化成清楚的服務旅程，位於使用者與既有企業服務之間，不取代 BNP / Cardif 核心系統。
+NAVI — AI Service Journey Navigator · Understand. Guide. Resolve.
 
-目前為 **Phase 2A — Intelligence Backend**：事件描述透過 Node.js/Express 交由 Gemini 理解，經嚴格 Schema 驗證與 deterministic mapping 接回原有工作區。文件辨識、FAQ、來源與服務導引仍為示範資料；沒有 OCR、RAG、MongoDB、Authentication 或 Multi-Agent。
+## Project Structure
 
-## 啟動
+```text
+apps/
+  web/                 NAVI：React / Vite，Premium UI、工作區、Golden Path
+  api/                 NAVI：Express / Gemini 意圖理解 API
+  mock-site/           Mock Website：Next.js / TypeScript / Tailwind
+    app/(site)/        模擬官網 8 頁與服務分頁
+    components/site/   模擬站導覽、Tabs、data-tour-id、示意下載
+    public/            原有靜態資產
+shared/intelligence.js NAVI 共用 Zod 契約與 deterministic routing
+lib/contracts/         原模擬服務助手契約（保留，未改成 NAVI 契約）
+lib/db/、lib/env.ts     原團隊的資料庫／環境規格骨架，尚未接入現有服務
+data/                  模擬官網本地 seed、爬蟲輸出
+knowledge/             NAVI 示範文件、FAQ、來源、準備度規則
+scripts/               啟動、雙站驗證、原有爬蟲
+docs/                 架構、展示、QA 與整合紀錄
+```
 
-需要 Node.js **22.12+** 與 npm。
+所有安裝共用 root `package-lock.json`；Node.js **22.12+**。請在 repository 根目錄安裝，不要為每個網站另建 lock file。
+
+## Run NAVI
+
+在根目錄：
 
 ```sh
 npm install
+# 首次設定：檔案已存在時勿覆蓋
 cp apps/api/.env.example apps/api/.env
-# 自行在 apps/api/.env 填入 GEMINI_API_KEY，不要把 key 放進前端。
+# 在 apps/api/.env 填入 GEMINI_API_KEY（只放 Backend）
+npm run dev:navi
+```
+
+主產品 URL：**http://127.0.0.1:5173/**。Backend：http://127.0.0.1:3001/api/health。
+`npm run dev` 仍是原本 NAVI 的啟動捷徑；`dev:web`、`dev:api` 可分別啟動。
+
+Backend 設定集中於 `apps/api/src/config/env.js`，範例在 `apps/api/.env.example`；Gemini 模型與 threshold 沿用現有設定。未設定 key 時 health 正常、分析 API 明確回覆未配置，不會冒充 AI 成功。
+
+前端設定在 `apps/web/.env.example`；`/api` 由 Vite proxy 連到 3001，production 需部署同 origin reverse proxy 或設定 `VITE_API_BASE_URL`。Key 不可放進 `VITE_*`。
+
+## Run Mock Website
+
+在根目錄：
+
+```sh
+npm install
+npm run dev:mock
+```
+
+或安裝完成後：
+
+```sh
+cd apps/mock-site
 npm run dev
 ```
 
-Root dev 同時啟動 Web `http://127.0.0.1:5173` 與 API `http://127.0.0.1:3001`。5173 已被使用時會停止並提示，不會默默切換到 CORS 未允許的連接埠。也可以分別用 `npm run dev:web`、`npm run dev:api`。修改 API `.env` 後重新啟動 API。
+URL：**http://127.0.0.1:3000/**。這是展示外部服務情境的模擬保險官網，**不是 NAVI**。
+固定綁定 127.0.0.1:3000；不與 NAVI 共用 router 或 API。沒有登入、保險送件、OpenAI 或 Turso runtime，不需要填 root `.env.example` 才能啟動。
 
-Backend 變數集中於 `apps/api/src/config/env.js`：`GEMINI_API_KEY`、`GEMINI_MODEL`（預設 `gemini-3.8-flash`）、`PORT`、`HOST`、`WEB_ORIGINS`、`INTENT_CONFIDENCE_THRESHOLD`（預設 0.65）、`AI_TIMEOUT_MS`（預設 10000）。Key 只在 server header 使用，`.env` 被 Git 忽略。
+保留首頁、服務總覽、表單下載、保單變更、借款、理賠程序、網路服務、名詞解釋，以及 hash 分頁、`revealTabPanels`、`data-tour-id`。內容讀 root `data/cardif_seed_data.json`，共用型別讀 `lib/contracts`；專用 tsconfig aliases 與 Next workspace root 已設定。原有示意 QR、下載說明和非官方標示保留；沒有對官方網站的 runtime fetch／iframe／盜連。
 
-可選的前端設定見 `apps/web/.env.example`。預設 `/api` 使用 Vite proxy；同 origin production 可沿用這個路徑，跨 origin 才需設定 `VITE_API_BASE_URL` 與 Backend origin allowlist。前端 `.env` 是公開設定，不能填任何 Secret。
+## Run Both
+
+```sh
+npm install
+npm run dev:all
+```
+
+| 執行程序 | URL | 用途 |
+| --- | --- | --- |
+| NAVI Web | http://127.0.0.1:5173/ | 主產品 |
+| NAVI API | http://127.0.0.1:3001/api/health | 意圖分析 Backend |
+| Mock Website | http://127.0.0.1:3000/ | 模擬外部服務 |
+
+`Ctrl+C` 一併停止三個程序；任一程序啟動失敗會停止其他程序。連接埠被占用時會報錯，不會自動換到另一個 port。不要同時再跑 `dev:navi`／`dev:mock`。
+
+## Demo Flow
+
+1. 開 **3000** 模擬網站 →「理賠程序介紹」(`/services/claims`) → 切換「應備文件」，展示使用者原本需要自行搜尋／閱讀的情境。
+2. **手動切換另一分頁至 5173 NAVI**。目前沒有跨站自動傳遞案件、嵌入式助手或自動導覽 overlay，請勿把它說成已完成。
+3. NAVI 輸入「我昨天從東京回台灣，班機延誤七個小時，不知道可以怎麼處理。」→ 開始分析 → 班機延誤旅程 **35%**。
+4. 上傳登機證（目前仍 Mock）→ **70%**；上傳延誤證明（Mock）→ **90%**；確認案件資料 → **100%**；前往服務僅開啟導引預覽，不送件。
+5. NAVI 右上選單「重新開始示範」可清除本分頁進度。reload 保留 sessionStorage；不同 tab 的案件分開。
+
+模擬官網的既有理賠資料與 NAVI 班機延誤示範資料是不同資料集，不能據此宣稱該公司承保旅遊延誤。未配置 Gemini 時，請先按下方方式**明確啟用示範備援**；備援畫面會標記本次未使用 AI。
 
 ## 測試與 Build
 
@@ -29,7 +96,12 @@ Backend 變數集中於 `apps/api/src/config/env.js`：`GEMINI_API_KEY`、`GEMIN
 npm test                  # Frontend + Backend，完全不需要 API Key
 npm run test:web
 npm run test:api
-npm run build             # Frontend production build
+npm run build             # NAVI Frontend production build
+npm run build:mock        # Mock Website production build
+npm run build:all         # 兩站各自 build
+npm run lint              # Mock Website 既有 ESLint
+npm run typecheck:mock    # Mock Website TypeScript
+npm run test:sites        # 先啟動 dev:all；雙站路由、資產、API proxy smoke checks
 npm run preview           # 只預覽 build，不會自動提供 API；需另啟 API / 設定部署 proxy
 npm run test:integration  # 真正 Gemini 測試，需要 apps/api/.env
 ```
@@ -75,6 +147,7 @@ Premium Dark UI、繁中／英文輔助、CSS Motion System、Reduced Motion、�
 
 詳見 [真實架構](docs/architecture.md)、[展示腳本](docs/demo-script.md) 與 [Phase 2A 報告](docs/phase-2a-report.md)。**Phase 2B / 2C 未實作。**
 
-## 合併紀錄
 
-已保留原有 Next.js 起始專案、團隊規格、共用契約與爬蟲檔案，以及雙方 Git 歷史。目前 root npm 指令執行 NAVI 的 React / Vite + Express workspaces；原有 `app/` Next.js 起始介面未納入這些啟動與 build 指令。
+## 整合與協作
+
+`3a09337` 的模擬官網成果已合併，NAVI 與 Mock Website 以 npm workspaces 分開。根目錄 Next.js 起始設定搬到 `apps/mock-site`，不再干擾 NAVI。兩種助手契約用途不同，沒有強行合併；原 `SPEC.md`／`AGENTS.md` 保留作為團隊規格紀錄，現有可執行入口以本 README 為準。完整差異與驗證見 [整合報告](docs/repository-integration.md)。

@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* 模擬官網配色：以綠色為主色，自行定義，不使用官網的 CSS */
+@theme {
+  --color-brand: #00915a;
+  --color-brand-dark: #00744a;
+  --color-brand-deep: #004d33;
+  --color-brand-light: #ebf6f0;
+  --color-ink: #2b2b2b;
+  --color-muted: #6b6b6b;
+  --font-sans: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+}
+
+body {
+  background: #ffffff;
+  color: var(--color-ink);
+}
