@@ -102,6 +102,16 @@ export async function evaluateLive(cases, { provider, config, budget }) {
         const bytes = samplePdf(entry.sampleType);
         const document = await analyzeDocument({ bytes, filename: 'synthetic.pdf', mimeType: 'application/pdf', size: bytes.length }, { provider, config });
         assert.equal(document.documentType, entry.sampleType); assert.equal(document.status, 'verified');
+        const expected = normalizeGeminiDocument(entry.output).fields;
+        for (const [field, value] of Object.entries(expected)) if (value !== null) {
+          assert.ok(document.fields[field], `Missing synthetic field: ${field}`);
+          if (['scheduledDeparture', 'actualDeparture', 'actualDepartureDate'].includes(field)) assert.equal(document.fields[field], value);
+        }
+        // Reuse the established airport/name/flight formatting comparison, without model-made rules.
+        assert.deepEqual(checkEvidenceConsistency([
+          { id: 'reference', documentType: 'boarding_pass', fields: expected },
+          { id: 'sample', documentType: 'delay_certificate', fields: document.fields },
+        ]), []);
         if (entry.sampleType === 'delay_certificate') assert.equal(document.fields.delayMinutes, 443);
       } else if (entry.kind === 'knowledge') {
         const answer = await answerKnowledge(entry.question, { provider, config });

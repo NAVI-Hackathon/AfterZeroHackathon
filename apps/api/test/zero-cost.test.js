@@ -145,6 +145,16 @@ test('Fixed live sample has nine cases; cached replay is reported separately fro
   const second = await evaluateLive(cases, { config, budget: secondBudget, provider: createGeminiProvider(config, transport, { cache, budget: secondBudget }) });
   assert.equal(second.failed, 0); assert.equal(second.requests, 0); assert.equal(second.cachedSamples, 9); assert.equal(second.liveLatencyMs.p50, null); assert.equal(calls, 9);
 });
+test('Document sample evaluation rejects wrong visible facts even when evidence can verify', async () => {
+  const entry = liveSamples(await loadDataset()).find(entry => entry.sampleType === 'boarding_pass');
+  for (const changes of [{ flightNumber: 'CI100' }, { origin: 'HND' }, { passengerName: null }, { departureDate: '2026-10-08' }, { scheduledDeparture: '14:25' }]) {
+    const raw = { ...entry.output, fields: { ...entry.output.fields, ...changes } };
+    const budget = createAIRequestBudget(12);
+    const provider = createGeminiProvider(config, async () => response(raw), { budget });
+    const report = await evaluateLive([entry], { provider, config, budget });
+    assert.equal(report.failed, 1); assert.equal(report.requests, 1);
+  }
+});
 test('Live evaluation stops on exhausted quota and skips remaining samples', async () => {
   const budget = createAIRequestBudget(12); let calls = 0;
   const provider = createGeminiProvider(config, async () => { calls++; return new Response('{}', { status: 429 }); }, { budget });

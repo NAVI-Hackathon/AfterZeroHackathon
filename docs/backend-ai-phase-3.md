@@ -80,7 +80,7 @@ Budget limits outbound attempts, not monetary cost. A billed project could charg
 | Security | 20 | reject stored injected workflow/readiness/eligibility/action fields | 0 |
 | Total | 120 | plus deterministic Demo Golden Path 35→70→90→100 | 9 |
 
-The security cases exercise schema and business-logic boundaries with adversarial stored outputs. They do **not** measure live prompt-injection resistance. Local intent checks exercise scripted Demo behavior and authored normalization fixtures, not model language comprehension. No fixture is preloaded into the Live cache as if Gemini produced it.
+The security cases exercise schema and business-logic boundaries with adversarial stored outputs. They do **not** measure live prompt-injection resistance. Local intent checks exercise scripted Demo behavior and authored normalization fixtures, not model language comprehension. Live document samples compare visible reference facts (flight, date, route, passenger and times), not only document classification or verified status. No fixture is preloaded into the Live cache as if Gemini produced it.
 
 Local reports total/passed/failed by group and elapsed time, with `requests=0`. Live reports fresh call attempts, cached samples, skipped cases, error codes and p50/p95 case latency. Percentiles exclude cache-only cases; each fresh case latency includes any retry/backoff and local validation. Cache and fresh samples remain distinct. A result such as 5/5 means “5/5 live sample cases passed,” never “100% AI accuracy.”
 
@@ -101,7 +101,7 @@ Missing/corrupt/invalid entries cannot bypass budget or Free Tier guards. Cache 
 - Live transport behavior, sampling, cache replay, quota, budget and CI guards are verified using injected mock responses only.
 - Public Intent / Journey / Document schemas and `apps/web` were not changed.
 
-Unit tests: Frontend 10/10 + Backend 73/73 = **83/83 passed**; existing 62 tests retained with the default-mode assertion updated to the new Demo requirement. NAVI production build passed. Running Demo API health, Intent, document fixtures, review and reload/get checks passed without Gemini. Historical Phase 2 live results remain in `backend-ai-phase-2.md` and are not reused as current Phase 3 measurements.
+Unit tests: Frontend 10/10 + Backend 74/74 = **84/84 passed**; existing 62 tests retained with the default-mode assertion updated to the new Demo requirement. NAVI production build passed. Running Demo API health, Intent, document fixtures, review and reload/get checks passed without Gemini. Historical Phase 2 live results remain in `backend-ai-phase-2.md` and are not reused as current Phase 3 measurements.
 
 ## Known limits / next decision
 
