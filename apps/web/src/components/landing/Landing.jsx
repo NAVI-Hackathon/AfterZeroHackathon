@@ -3,11 +3,11 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import Icon from '../Icon.jsx';
 import AnalysisSequence from './AnalysisSequence.jsx';
 import AnalysisFeedback from './AnalysisFeedback.jsx';
-import { DEMO_STORY } from '../../mocks/flightDelay.js';
+import { DEMO_STORY } from '../../mocks/hospitalClaim.js';
 import { fadeUp, staggerChildren, transition } from '../../motion/tokens.js';
 
 const scenarios = [
-  { id: 'flight', icon: 'plane', label: '我的班機延誤了', text: DEMO_STORY },
+  { id: 'hospital', icon: 'medical', label: '我住院了，想申請理賠', text: DEMO_STORY },
   { id: 'car', icon: 'car', label: '我發生車禍了', text: '我今天早上開車發生擦撞，想知道接下來要準備什麼。' },
   { id: 'payment', icon: 'card', label: '我想更改繳費方式', text: '我想把保單的繳費方式改成信用卡扣款，要從哪裡開始？' },
 ];
@@ -75,7 +75,7 @@ export default function Landing({ analysisPhase, feedback, onStart, onRetry, onC
           <textarea
             id="story-input" ref={textarea} value={text} maxLength={MAX_LENGTH} rows={3}
             disabled={analysing} aria-describedby="story-help"
-            placeholder="例如：我從東京回台灣的班機延誤了 7 小時，不知道可以申請什麼……"
+            placeholder="例如：我上週在台中榮總住院五天，要怎麼申請理賠？"
             onChange={e => { cancelAnimationFrame(fillFrame.current); setText(e.target.value); setError(''); onClearFeedback(); }}
             onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(e); }}
           />

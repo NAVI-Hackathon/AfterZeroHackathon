@@ -2,62 +2,55 @@ import { useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import Icon from '../Icon.jsx';
 import ManualEntryForm from './ManualEntryForm.jsx';
-import { validateFile } from '../../domain/workflow.js';
-import { documentSpecs } from '../../mocks/flightDelay.js';
-import { city, clockText, dateText, delayText, minutesBetween } from '../../content/format.js';
+import { validateFile } from '../../domain/files.js';
+import { documentSpecs } from '../../mocks/hospitalClaim.js';
+import { maskAccount, stayDays, stayText } from '../../content/format.js';
 import { CheckDraw, useCountUp } from '../../motion/primitives.jsx';
 import { fadeUp, spring, staggerChildren, transition } from '../../motion/tokens.js';
 
-function fileError(code) {
-  if (!code) return '';
-  if (code.includes('empty')) return '這份文件是空的，請重新選擇。';
-  if (code.includes('10 MB')) return '文件超過 10 MB，請選擇較小的檔案。';
-  return '不支援這個檔案格式，請使用 PDF、PNG、JPG 或 WebP。';
-}
-
-function DelayValue({ minutes }) {
-  const shown = useCountUp(minutes ?? 0, { from: 0 });
-  return <>{minutes === null ? '待確認' : delayText(shown)}</>;
+function DaysValue({ days }) {
+  const shown = useCountUp(days ?? 0, { from: 0 });
+  return <>{days === null ? '待確認' : `${Math.round(shown)} 天`}</>;
 }
 
 function fieldRows(type, fields) {
-  if (type === 'boarding_pass') {
+  if (type === 'diagnosis_certificate') {
     return [
-      ['文件類型', '登機證'],
-      ['乘客姓名', fields.passengerName],
-      ['航線', `${city(fields.origin)} → ${city(fields.destination)}`],
-      ['航班', fields.flightNumber],
-      ['日期', dateText(fields.departureDate)],
+      ['文件類型', '診斷證明書'],
+      ['病患姓名', fields.patientName],
+      ['醫院', fields.hospitalName],
+      ['診斷', fields.diagnosis],
+      ['住院期間', stayText(fields.admissionDate, fields.dischargeDate)],
+      ['住院天數', <DaysValue key="days" days={stayDays(fields.admissionDate, fields.dischargeDate)} />, true],
     ];
   }
-  const minutes = minutesBetween(fields.scheduledDeparture, fields.actualDeparture);
   return [
-    ['文件類型', '航空公司延誤證明'],
-    ['原訂起飛', clockText(fields.scheduledDeparture)],
-    ['實際起飛', clockText(fields.actualDeparture)],
-    ['確認延誤', <DelayValue key="delay" minutes={minutes} />, true],
+    ['文件類型', '存摺影本'],
+    ['戶名', fields.accountHolder],
+    ['銀行', fields.bankName],
+    ['帳號', maskAccount(fields.accountLast4)],
   ];
 }
 
-function Result({ type, document, filename }) {
-  const spec = documentSpecs[type];
+function Result({ type, document }) {
+  const manual = document.entryMethod === 'manual';
   return (
     <motion.div className="doc-result" initial="hidden" animate="show" variants={staggerChildren(0.06, 0.05)}>
       <motion.div className="doc-result-head" variants={fadeUp}>
-        <span className="doc-status"><CheckDraw size={12} strokeWidth={2.6} />{document.status === 'manual' ? '已手動確認' : '辨識完成'}</span>
-        <span className="doc-confidence">{document.status === 'manual' ? '手動輸入' : `辨識信心 ${Math.round(document.confidence * 100)}%`}</span>
+        <span className="doc-status"><CheckDraw size={12} strokeWidth={2.6} />{manual ? '已手動確認' : '辨識完成'}</span>
+        <span className="doc-confidence">{manual ? '手動輸入' : `辨識信心 ${Math.round(document.confidence * 100)}%`}</span>
       </motion.div>
       <dl className="doc-fields">
         {fieldRows(type, document.fields).map(([label, value, emphasis]) => (
           <motion.div key={label} className={emphasis ? 'is-emphasis' : ''} variants={fadeUp}>
-            <dt>{label}</dt><dd>{value}</dd>
+            <dt>{label}</dt><dd>{value || '待確認'}</dd>
           </motion.div>
         ))}
       </dl>
       <motion.p className="doc-match" variants={fadeUp}>
-        <Icon name="check" size={14} strokeWidth={2.2} />符合項目：{spec.match}
+        <Icon name="check" size={14} strokeWidth={2.2} />符合項目：{documentSpecs[type].match}
       </motion.p>
-      {filename && document.status !== 'manual' && <motion.p className="doc-filename" variants={fadeUp}>{filename} · 示範辨識資料</motion.p>}
+      {!manual && <motion.p className="doc-filename" variants={fadeUp}>{document.filename} · 示範辨識資料</motion.p>}
     </motion.div>
   );
 }
@@ -73,7 +66,7 @@ function Analyzing() {
   );
 }
 
-export default function DocumentCard({ type, document, filename, uiState, busy, onUpload, onRemove, onManual, onRetry, registerInput }) {
+export default function DocumentCard({ type, document, uiState, busy, onUpload, onRemove, onManual, onRetry, registerInput }) {
   const spec = documentSpecs[type];
   const input = useRef(null);
   const depth = useRef(0);
@@ -89,12 +82,12 @@ export default function DocumentCard({ type, document, filename, uiState, busy, 
     if (disabled) return;
     if (files.length !== 1) { setError('請一次上傳一份文件。'); return; }
     const problem = validateFile(files[0]);
-    setError(fileError(problem));
-    if (!problem) onUpload(type, { filename: files[0].name });
+    setError(problem ?? '');
+    if (!problem) onUpload(type, { file: files[0] });
   }
   function bindInput(el) { input.current = el; registerInput?.(type, el); }
 
-  const state = processing ? 'analyzing' : document ? 'result' : manual ? 'manual' : failed ? 'failed' : 'empty';
+  const state = processing ? 'analyzing' : manual ? 'manual' : document ? 'result' : failed ? 'failed' : 'empty';
 
   return (
     <motion.article
@@ -106,7 +99,7 @@ export default function DocumentCard({ type, document, filename, uiState, busy, 
       onDrop={e => { e.preventDefault(); if (!document) receive(Array.from(e.dataTransfer.files)); else { depth.current = 0; setDragging(false); } }}
     >
       <header className="doc-header">
-        <span className="doc-icon">{document ? <CheckDraw size={16} strokeWidth={2.2} /> : <Icon name="document" size={17} />}</span>
+        <span className="doc-icon">{document ? <CheckDraw size={16} strokeWidth={2.2} /> : <Icon name={type === 'bank_passbook' ? 'bank' : 'document'} size={17} />}</span>
         <div>
           <h3>{spec.title}</h3>
           <p>{spec.hint}</p>
@@ -123,7 +116,7 @@ export default function DocumentCard({ type, document, filename, uiState, busy, 
 
         {state === 'result' && (
           <motion.div key="result" initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1, transition: spring }} exit={{ opacity: 0, transition: transition.exit }}>
-            <Result type={type} document={document} filename={filename} />
+            <Result type={type} document={document} />
           </motion.div>
         )}
 

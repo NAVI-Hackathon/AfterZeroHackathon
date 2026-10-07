@@ -1,41 +1,42 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import Icon from '../Icon.jsx';
-import faq from '../../../../../knowledge/faq.json' with { type: 'json' };
-import sources from '../../../../../knowledge/sitemap.json' with { type: 'json' };
-import { assistantFaq } from '../../mocks/flightDelay.js';
-import { city, delayText } from '../../content/format.js';
+import { assistantQuestions } from '../../mocks/hospitalClaim.js';
+import { claimByMail, claimFaq, hospitalUpload, officialSource, reminders, unionChain } from '../../content/cardifData.js';
 import { crossfade, fadeUp, staggerChildren, transition } from '../../motion/tokens.js';
 
 function suggestionFor(snapshot) {
-  const { journey, context } = snapshot;
+  const { journey } = snapshot;
   if (journey.currentStage === 'HUMAN_REVIEW') return '這個情況需要專員確認。你可以先下載服務摘要，聯繫時就不用重新說明。';
-  if (context.serviceKey !== 'flight_delay') return journey.nextAction.description;
+  if (snapshot.context.kind !== 'hospital') return journey.nextAction.description;
   const target = journey.nextAction.target;
-  if (target === 'boarding_pass') return '先從登機證開始：它能確認你的姓名、航班與搭乘日期，是後續文件比對的基準。';
-  if (target === 'delay_certificate') return '延誤證明通常可向航空公司櫃台或官網申請，記得確認上面有原訂與實際起飛時間。';
-  if (journey.nextAction.type === 'REVIEW_DATA') return `兩份文件都已辨識，延誤時間為 ${delayText(context.verifiedDelayMinutes)}。確認資料無誤後即可前往服務入口。`;
-  return '資料已準備完成。前往服務入口後，由保險公司依保單條款審核。';
+  if (target === 'diagnosis_certificate') return '先從診斷書開始：它能確認醫院、住院期間與病名，是後續申請的主要文件。';
+  if (target === 'bank_passbook') return '理賠金以匯款給付，準備好存摺封面影本，確認戶名與帳號清楚可辨識。';
+  if (journey.nextAction.type === 'REVIEW_INFORMATION') return '兩份文件都已辨識。確認資料無誤後，記得下載並填妥保險金申請書。';
+  return journey.nextAction.description;
 }
 
+// Answers are quoted from data/cardif_seed_data.json; NAVI never writes its own policy text.
 function answerFor(question) {
-  const entry = assistantFaq.find(item => item.match.test(question));
-  const knowledge = entry && faq.find(item => item.id === entry.id);
-  return knowledge
-    ? { text: knowledge.answer, sourceIds: knowledge.sourceIds }
-    : { text: '目前可以協助整理班機延誤的文件與步驟。保單條件或其他問題，建議轉由專員確認。', sourceIds: [] };
+  const entry = assistantQuestions.find(item => item.match.test(question));
+  if (entry?.id === 'duration') {
+    const faq = claimFaq.find(f => /多久/.test(f.q));
+    if (faq) return { text: faq.a, source: officialSource(faq.source) };
+  }
+  if (entry?.id === 'hospital') return { text: `${hospitalUpload.name}：${hospitalUpload.notes.join('；')}。`, source: officialSource(hospitalUpload.url) };
+  if (entry?.id === 'originals') return { text: `${unionChain.name}：${reminders.unionReturnOriginals}；${reminders.unionLargeAmount}。`, source: officialSource(unionChain.url) };
+  return { text: '這個問題目前沒有可引用的官網資料，建議轉由專員確認。', source: null };
 }
 
 export default function AssistantPanel({ snapshot, onHandoff }) {
   const { journey, context } = snapshot;
-  const isFlight = context.serviceKey === 'flight_delay';
+  const isHospital = context.kind === 'hospital';
+  const hospital = journey.claimContext?.hospital;
   const [question, setQuestion] = useState('');
   const [answers, setAnswers] = useState([]);
   const [thinking, setThinking] = useState(false);
   const timer = useRef(0);
-  const log = useRef(null);
   useEffect(() => () => clearTimeout(timer.current), []);
-  useEffect(() => { if (answers.length) log.current?.lastElementChild?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [answers]);
 
   function ask(text) {
     const q = text.trim();
@@ -46,7 +47,7 @@ export default function AssistantPanel({ snapshot, onHandoff }) {
 
   const facts = [
     ['已辨識服務', journey.title],
-    ...(isFlight ? [['航線', `${city(context.reported.origin)} → ${city(context.reported.destination)}`], ['你描述的延誤', context.reported.delayMinutes === null ? '待確認' : `約 ${delayText(context.reported.delayMinutes)}`]] : []),
+    ...(isHospital ? [['住院醫院', hospital ? (hospital.matchedName ?? hospital.mentioned) : '待確認'], ['醫起通', hospital ? (hospital.partner ? '合作醫院' : '非合作醫院') : '待確認']] : []),
   ];
 
   return (
@@ -64,7 +65,7 @@ export default function AssistantPanel({ snapshot, onHandoff }) {
 
         <motion.section className="insight" variants={fadeUp} aria-labelledby="insight-title">
           <h3 id="insight-title" className="section-label">NAVI 的理解</h3>
-          <p className="insight-summary">{context.summary}</p>
+          <p className="insight-summary">{journey.summary}</p>
           <dl className="insight-facts">
             {facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
             <div>
@@ -84,46 +85,53 @@ export default function AssistantPanel({ snapshot, onHandoff }) {
           )}
         </motion.section>
 
-        {isFlight && (
+        {isHospital && journey.claimContext.reminders.length > 0 && (
+          <motion.section className="reminders" variants={fadeUp} aria-labelledby="reminders-title">
+            <h3 id="reminders-title" className="section-label">容易漏掉的提醒</h3>
+            <ul>{journey.claimContext.reminders.map(r => <li key={r}>{r}</li>)}</ul>
+          </motion.section>
+        )}
+
+        {(journey.officialSources?.length ?? 0) > 0 && (
           <motion.section className="sources" variants={fadeUp} aria-labelledby="sources-title">
-            <h3 id="sources-title" className="section-label">資料來源 <span className="tag">示範知識庫</span></h3>
+            <h3 id="sources-title" className="section-label">資料來源</h3>
             <ul>
-              {sources.map(source => (
-                <li key={source.id}>
-                  <details>
-                    <summary><Icon name="book" size={14} />{source.title}<Icon name="chevron" size={13} className="summary-chevron" /></summary>
-                    <p className="source-section">{source.section}</p>
-                    <p>{source.content}</p>
-                  </details>
+              {journey.officialSources.map(source => (
+                <li key={source.url}>
+                  <a href={source.url} target="_blank" rel="noopener noreferrer" className="source-link">
+                    <Icon name="book" size={14} />法國巴黎人壽官網・{source.title}<Icon name="external" size={13} className="summary-chevron" />
+                  </a>
+                  <p className="source-section">擷取日期 {source.retrievedAt}</p>
                 </li>
               ))}
             </ul>
           </motion.section>
         )}
 
-        {isFlight && (
+        {isHospital && (
           <motion.section className="ask" variants={fadeUp} aria-labelledby="ask-title">
             <h3 id="ask-title" className="section-label">想進一步了解</h3>
-            <div className="ask-log" ref={log} aria-live="polite">
+            <div className="ask-log" aria-live="polite">
               {answers.map((a, i) => (
                 <motion.div key={i} className="qa" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: transition.enter }}>
                   <p className="qa-q">{a.q}</p>
                   <p className="qa-a">{a.text}</p>
-                  {a.sourceIds.length > 0 && <p className="qa-source"><Icon name="book" size={12} />依據：{a.sourceIds.map(id => sources.find(s => s.id === id)?.title).filter(Boolean).join('、')}</p>}
+                  {a.source && <p className="qa-source"><Icon name="book" size={12} />依據：法國巴黎人壽官網・{a.source.title}（擷取 {a.source.retrievedAt}）</p>}
                 </motion.div>
               ))}
               {thinking && <p className="qa-thinking" role="status"><span className="dots" aria-hidden="true"><i /><i /><i /></span>正在整理說明</p>}
             </div>
             <div className="ask-suggestions">
-              {assistantFaq.filter(item => !answers.some(a => a.q === item.question)).map(item => (
+              {assistantQuestions.filter(item => !answers.some(a => a.q === item.question)).map(item => (
                 <button key={item.id} type="button" className="chip" disabled={thinking} onClick={() => ask(item.question)}>{item.question}</button>
               ))}
             </div>
             <form className="ask-form" onSubmit={e => { e.preventDefault(); ask(question); }}>
               <label className="visually-hidden" htmlFor="ask-input">詢問 NAVI</label>
-              <input id="ask-input" value={question} maxLength={300} placeholder="詢問文件或下一步…" onChange={e => setQuestion(e.target.value)} />
+              <input id="ask-input" value={question} maxLength={300} placeholder="詢問文件或申請方式…" onChange={e => setQuestion(e.target.value)} />
               <button type="submit" className="icon-button icon-button-filled" aria-label="送出問題" disabled={!question.trim() || thinking}><Icon name="arrow" size={16} /></button>
             </form>
+            <p className="ask-note">回答引用自法國巴黎人壽官網公開資料（擷取 {officialSource(claimByMail.url).retrievedAt}）。</p>
           </motion.section>
         )}
       </motion.div>

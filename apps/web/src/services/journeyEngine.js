@@ -1,158 +1,230 @@
 import { z } from 'zod';
-import { createCase, addMockEvidence, removeEvidence, deriveWorkflow, delayMinutes, STATES } from '../domain/workflow.js';
-import { intelligenceLabels, validateUnderstanding } from '../domain/intelligence.js';
-import { JourneySchema, DocumentSchema } from '../../../../shared/journey.js';
-import { nextActions, requirementNames } from '../mocks/flightDelay.js';
+import { DocumentSchema, ServiceJourneySchema, JOURNEY_STATES as STATES } from '../../../../shared/journey.js';
+import { serviceLabel, validateUnderstanding } from '../domain/intelligence.js';
+import { recognizeHospital } from '../domain/hospitals.js';
 import { basicJourneys } from '../mocks/basicJourneys.js';
+import { documentFixtures, DOCUMENT_TYPES } from '../mocks/hospitalClaim.js';
+import {
+  claimApplicationForm, claimByMail, diagnosisRule, hospitalUpload, inpatientDocuments, officialSource,
+  partnerHospitals, passbookRule, reminders, unionChain,
+} from '../content/cardifData.js';
 
-// Local journey engine used by both adapters until the backend exposes journey endpoints.
-// Readiness and workflow rules stay in domain/workflow.js (Developer B); this file only maps
-// that state onto the shared Journey contract and handles serialisation.
+// Local journey engine (both adapters). Produces journeys that validate against the shared
+// ServiceJourneySchema. Insurer facts come from content/cardifData.js only.
 
-const DOCUMENT_TYPES = ['boarding_pass', 'delay_certificate'];
+const DISCLAIMER = '準備完成度代表資料完整度，不代表理賠核准；保障範圍與給付仍依保單條款與保險公司審核為準。';
+const CONFIDENCE_FOR_REVIEW = 0.65;
+const claimsSource = officialSource(claimByMail.url);
 
-export function createSession(story, understanding) {
-  const claim = createCase(story, understanding);
-  return { journeyId: `journey_${claim.createdAt.toString(36)}`, claim, sources: {} };
+// Readiness mapping (35 → 70 → 90 → 100), see commit message for the rationale.
+const WEIGHTS = { incident: 20, service: 15, diagnosis_certificate: 20, inpatient_info: 15, bank_passbook: 20, confirmation: 10 };
+
+const optionalDocs = inpatientDocuments.filter(name => name.includes('依病況'));
+const applicationForm = inpatientDocuments.find(name => name.includes('申請書'));
+const certificateName = inpatientDocuments.find(name => name.includes('診斷書'));
+
+const destinations = {
+  documents: { kind: 'page', path: '/services/claims', anchor: 'claim-documents-table', label: '查看住院醫療應備文件', source: claimsSource },
+  rules: { kind: 'page', path: '/services/claims', anchor: 'claim-general-rules', label: '查看理賠申請注意事項', source: claimsSource },
+  form: { kind: 'form', path: '/services/forms', anchor: 'form-claim-1-1-1', label: `下載${claimApplicationForm?.name ?? '保險金申請書'}`, source: claimsSource },
+  hospitalUpload: { kind: 'entry_point', path: '/services/claims', anchor: 'service-claim-hospital-upload', label: '前往保險理賠醫起通', source: officialSource(hospitalUpload.url) },
+  unionChain: { kind: 'entry_point', path: '/services/claims', anchor: 'service-claim-union-chain', label: '前往理賠聯盟鏈', source: officialSource(unionChain.url) },
+  mail: { kind: 'page', path: '/services/claims', anchor: 'service-claim-by-mail', label: '查看郵寄申請方式', source: claimsSource },
+};
+export const claimDestinations = destinations;
+
+function claimContext(story) {
+  const hospital = recognizeHospital(story, partnerHospitals);
+  const partner = Boolean(hospital?.partner);
+  return {
+    hospital,
+    channels: [
+      { id: 'hospital_upload', name: '保險理賠醫起通', available: partner, notes: [reminders.hospitalStillNeedsCertificate, reminders.hospitalPartnersOnly], destination: destinations.hospitalUpload },
+      { id: 'union_chain', name: '理賠聯盟鏈', available: true, notes: [reminders.unionReturnOriginals, reminders.unionLargeAmount], destination: destinations.unionChain },
+      { id: 'mail', name: '郵寄申請', available: true, notes: claimByMail.notes, destination: destinations.mail },
+    ],
+    reminders: [
+      ...(partner ? [`使用醫起通時：${reminders.hospitalStillNeedsCertificate}`] : []),
+      `使用理賠聯盟鏈時：${reminders.unionReturnOriginals}`,
+      `使用理賠聯盟鏈時：${reminders.unionLargeAmount}`,
+    ],
+  };
 }
 
-export function supportsDocuments(session) {
-  return session.claim.interpretation.serviceType === 'flight_delay';
+const uuid = () => globalThis.crypto.randomUUID();
+const now = () => new Date().toISOString();
+
+export function createSession(story, understanding, provider = 'demo') {
+  const at = now();
+  return { journeyId: uuid(), createdAt: at, updatedAt: at, story: story.trim(), understanding: validateUnderstanding(understanding), provider, documents: [], confirmed: false, handoffRequested: false };
 }
 
-export function applySampleDocument(session, type, filename, source = 'sample') {
-  return { ...session, claim: addMockEvidence(session.claim, type, filename), sources: { ...session.sources, [type]: source } };
+export function journeyKind(session) {
+  const type = session.understanding.data.serviceType;
+  return type === 'hospitalization_claim' ? 'hospital' : basicJourneys[type] ? type : 'unknown';
+}
+export const supportsDocuments = session => journeyKind(session) === 'hospital';
+const touch = session => ({ ...session, updatedAt: now() });
+
+export function applySampleDocument(session, type, { filename, mimeType, size, entryMethod = 'sample' } = {}) {
+  if (!supportsDocuments(session) || !documentFixtures[type]) throw new Error('Unsupported document requirement.');
+  const fixture = documentFixtures[type];
+  // Recognition is mocked: fields always come from the owned fixture, never from file contents.
+  const document = DocumentSchema.parse({
+    id: uuid(), documentType: type, confidence: fixture.confidence, fields: { ...fixture.fields },
+    status: 'verified', matchedRequirements: [type], filename: (filename ?? fixture.sampleName).slice(0, 180),
+    mimeType: mimeType ?? fixture.mimeType, size: size ?? fixture.size, source: session.provider === 'live' ? 'live' : 'demo', isMock: true, entryMethod,
+  });
+  return touch({ ...session, confirmed: false, documents: [...session.documents.filter(d => d.documentType !== type), document] });
 }
 
-const ManualBoardingPass = z.object({
-  passengerName: z.string().trim().min(1).max(60),
-  flightNumber: z.string().trim().min(2).max(10),
-  origin: z.string().trim().min(1).max(40),
-  destination: z.string().trim().min(1).max(40),
-  departureDate: z.iso.date(),
-}).strict();
-const ManualDelayCertificate = z.object({
-  flightNumber: z.string().trim().min(2).max(10),
-  scheduledDeparture: z.iso.datetime({ offset: true }),
-  actualDeparture: z.iso.datetime({ offset: true }),
-}).strict().refine(f => delayMinutes(f) !== null, { message: '實際起飛時間需晚於原訂時間' });
-export const manualSchemas = { boarding_pass: ManualBoardingPass, delay_certificate: ManualDelayCertificate };
+const text = z.string().trim().min(1).max(60);
+export const manualSchemas = {
+  diagnosis_certificate: z.object({ patientName: text, hospitalName: text, admissionDate: z.iso.date(), dischargeDate: z.iso.date(), diagnosis: text })
+    .strict().refine(f => f.dischargeDate >= f.admissionDate, { message: '出院日期需晚於或等於入院日期' }),
+  bank_passbook: z.object({ accountHolder: text, bankName: text, accountLast4: z.string().regex(/^\d{4}$/) }).strict(),
+};
 
 export function applyManualDocument(session, type, fields) {
   if (!supportsDocuments(session) || !manualSchemas[type]) throw new Error('Unsupported document requirement.');
   const parsed = manualSchemas[type].parse(fields);
-  const evidence = { documentType: type, confidence: 1, fields: parsed, filename: '手動輸入', isMock: false };
-  return {
-    ...session,
-    claim: { ...session.claim, confirmed: false, evidence: { ...session.claim.evidence, [type]: evidence } },
-    sources: { ...session.sources, [type]: 'manual' },
-  };
+  // ponytail: the shared schema requires file metadata; manual entries carry a placeholder (1 byte, PDF).
+  const document = DocumentSchema.parse({
+    id: uuid(), documentType: type, confidence: 1, fields: parsed, status: 'verified', matchedRequirements: [type],
+    filename: '手動輸入', mimeType: 'application/pdf', size: 1, source: session.provider === 'live' ? 'live' : 'demo', isMock: false, entryMethod: 'manual',
+  });
+  return touch({ ...session, confirmed: false, documents: [...session.documents.filter(d => d.documentType !== type), document] });
 }
 
 export function removeDocument(session, type) {
-  const sources = { ...session.sources };
-  delete sources[type];
-  return { ...session, claim: removeEvidence(session.claim, type), sources };
+  return touch({ ...session, confirmed: false, documents: session.documents.filter(d => d.documentType !== type) });
+}
+
+const verified = (session, type) => session.documents.some(d => d.documentType === type && d.status === 'verified');
+function inpatientInfoComplete(session) {
+  const f = session.documents.find(d => d.documentType === 'diagnosis_certificate')?.fields;
+  return Boolean(f?.hospitalName && f?.admissionDate && f?.dischargeDate);
+}
+function hospitalChecks(session) {
+  const data = session.understanding.data;
+  return {
+    incident: Boolean(session.story),
+    service: data.serviceType === 'hospitalization_claim',
+    diagnosis_certificate: verified(session, 'diagnosis_certificate'),
+    inpatient_info: verified(session, 'diagnosis_certificate') && inpatientInfoComplete(session),
+    bank_passbook: verified(session, 'bank_passbook'),
+    confirmation: session.confirmed,
+  };
+}
+export function readyForReview(session) {
+  const c = hospitalChecks(session);
+  return c.diagnosis_certificate && c.inpatient_info && c.bank_passbook;
 }
 
 export function confirmSession(session) {
-  const workflow = deriveWorkflow(session.claim);
-  if (workflow.state !== STATES.READY_FOR_REVIEW) throw new Error('Journey is not ready for review.');
-  return { ...session, claim: { ...session.claim, confirmed: true } };
+  if (!supportsDocuments(session) || !readyForReview(session)) throw new Error('Journey is not ready for review.');
+  return touch({ ...session, confirmed: true });
+}
+export const requestHandoff = session => touch({ ...session, handoffRequested: true });
+
+function hospitalRequirements(session) {
+  const checks = hospitalChecks(session);
+  const req = (id, name, description) => ({ id, name, description, required: true, status: checks[id] ? 'verified' : 'missing', weight: WEIGHTS[id] });
+  return [
+    req('incident', '事件資訊', '已整理你描述的住院情況。'),
+    req('service', '服務辨識', '已辨識為住院醫療理賠，不代表理賠資格。'),
+    req('diagnosis_certificate', certificateName, diagnosisRule),
+    req('inpatient_info', '住院資訊', '診斷書上的醫院與住院期間完整。'),
+    req('bank_passbook', '存摺影本', passbookRule),
+    req('confirmation', '資料確認', `確認辨識出的資料，並填妥${applicationForm}。`),
+    ...optionalDocs.map((name, i) => ({ id: `optional_${i + 1}`, name, description: '依病況需要時再準備。', required: false, status: 'missing', weight: 0 })),
+  ];
 }
 
-export function requestHandoff(session) {
-  return { ...session, claim: { ...session.claim, handoffRequested: true } };
+function hospitalNextAction(session, partner) {
+  if (!verified(session, 'diagnosis_certificate')) {
+    return { type: 'UPLOAD_DOCUMENT', target: 'diagnosis_certificate', title: `請上傳${certificateName}`, description: diagnosisRule, destination: destinations.documents };
+  }
+  if (!inpatientInfoComplete(session)) {
+    return { type: 'PROVIDE_INFORMATION', target: 'inpatient_info', title: '請補齊住院資訊', description: '請重新上傳清楚的診斷書，或手動輸入醫院與住院期間。', destination: destinations.documents };
+  }
+  if (!verified(session, 'bank_passbook')) {
+    return { type: 'UPLOAD_DOCUMENT', target: 'bank_passbook', title: '請上傳存摺影本', description: `${passbookRule}。`, destination: destinations.rules };
+  }
+  if (!session.confirmed) {
+    return { type: 'REVIEW_INFORMATION', target: null, title: `確認資料並填寫${applicationForm}`, description: '確認辨識出的資料，並下載保險金申請書填寫簽名。', destination: destinations.form };
+  }
+  return partner
+    ? { type: 'PROCEED_TO_SERVICE', target: 'hospital_upload', title: '透過醫起通申請理賠', description: `你住院的醫院是醫起通合作醫院。${reminders.hospitalStillNeedsCertificate}。`, destination: destinations.hospitalUpload }
+    : { type: 'PROCEED_TO_SERVICE', target: 'union_chain', title: '透過理賠聯盟鏈申請', description: `${reminders.unionReturnOriginals}。`, destination: destinations.unionChain };
 }
 
-function flightNextAction(workflow, confirmed) {
-  if (workflow.state === STATES.HUMAN_REVIEW) return nextActions.specialist;
-  if (workflow.next === 'review') return confirmed ? nextActions.proceed : nextActions.review;
-  return nextActions[workflow.next];
+function hospitalStage(session) {
+  if (session.understanding.data.confidence < CONFIDENCE_FOR_REVIEW || session.handoffRequested) return STATES.HUMAN_REVIEW;
+  if (!readyForReview(session)) return STATES.EVIDENCE_COLLECTION;
+  return session.confirmed ? STATES.READY_TO_PROCEED : STATES.READY_FOR_REVIEW;
 }
 
-/** Session → { journey, documents, context }. journey/documents are validated against the shared contract. */
+/** Session → { journey, context }. journey validates against the shared ServiceJourneySchema. */
 export function toSnapshot(session) {
-  const { claim } = session;
-  const workflow = deriveWorkflow(claim);
-  const intelligence = claim.intelligence;
-  const serviceKey = claim.interpretation.serviceType;
-  const isFlight = serviceKey === 'flight_delay';
-  const basic = basicJourneys[workflow.state === STATES.HUMAN_REVIEW && !isFlight ? 'unknown' : serviceKey] ?? basicJourneys.unknown;
-  const proceeding = isFlight && claim.confirmed && workflow.state === STATES.READY_FOR_REVIEW;
-
-  const journey = JourneySchema.parse({
-    id: session.journeyId,
-    serviceType: intelligence?.data.serviceType ?? serviceKey,
-    title: intelligence ? intelligenceLabels[intelligence.data.serviceType] : basic.title,
-    currentStage: proceeding ? 'READY_TO_PROCEED' : workflow.state,
-    readiness: isFlight ? workflow.score : 0,
-    confidence: claim.interpretation.confidence,
-    requirements: isFlight
-      ? workflow.requirements.map(r => ({ id: r.id, name: requirementNames[r.id], required: true, status: r.complete ? 'verified' : 'missing' }))
-      : basic.requirements,
-    nextAction: isFlight ? flightNextAction(workflow, claim.confirmed) : basic.nextAction,
-  });
-
-  const documents = Object.entries(claim.evidence).map(([type, evidence]) => DocumentSchema.parse({
-    id: `doc_${type}`,
-    documentType: type,
-    status: session.sources[type] === 'manual' ? 'manual' : 'verified',
-    confidence: evidence.confidence,
-    fields: Object.fromEntries(Object.entries(evidence.fields).map(([key, value]) => [key, String(value)])),
-  }));
-
+  const kind = journeyKind(session);
+  const { data, meta } = session.understanding;
+  const base = {
+    id: session.journeyId, serviceType: data.serviceType, summary: data.summary, confidence: data.confidence,
+    extractedData: data.extractedData, documents: session.documents,
+    conversation: [{ role: 'user', message: session.story, createdAt: session.createdAt }],
+    sources: [], confirmed: session.confirmed, provider: session.provider,
+    createdAt: session.createdAt, updatedAt: session.updatedAt, disclaimer: DISCLAIMER,
+  };
+  let journey;
+  if (kind === 'hospital') {
+    const context = claimContext(session.story);
+    const requirements = hospitalRequirements(session);
+    const currentStage = hospitalStage(session);
+    journey = {
+      ...base, title: serviceLabel(data.serviceType), supported: true, currentStage,
+      readiness: requirements.reduce((sum, r) => sum + (r.status === 'verified' ? r.weight : 0), 0),
+      requirements,
+      nextAction: currentStage === STATES.HUMAN_REVIEW
+        ? { type: 'CONTACT_SPECIALIST', target: null, title: '轉由專員協助', description: '部分資訊需要專員確認，NAVI 已整理好你的描述與文件。' }
+        : hospitalNextAction(session, context.hospital?.partner),
+      claimContext: context,
+      officialSources: [claimsSource],
+    };
+  } else {
+    const basic = basicJourneys[meta.outcome === 'human_review' ? 'unknown' : kind];
+    journey = {
+      ...base, title: basic === basicJourneys.unknown && kind !== 'unknown' ? serviceLabel(data.serviceType) : basic.title, supported: false,
+      currentStage: meta.outcome === 'human_review' || kind === 'unknown' || session.handoffRequested ? STATES.HUMAN_REVIEW : STATES.SERVICE_IDENTIFIED,
+      readiness: 0, requirements: basic.requirements, nextAction: basic.nextAction,
+      officialSources: basic.nextAction.destination ? [basic.nextAction.destination.source] : [],
+    };
+  }
   return {
-    journey,
-    documents,
-    context: {
-      serviceKey,
-      story: claim.input,
-      summary: intelligence?.data.summary ?? '',
-      source: intelligence?.meta.source ?? 'demo_fallback',
-      reported: intelligence?.data.extractedData ?? { origin: null, destination: null, delayMinutes: null, incidentDate: null },
-      verifiedDelayMinutes: workflow.delay ?? null,
-      files: Object.fromEntries(Object.entries(claim.evidence).map(([type, evidence]) => [type, evidence.filename])),
-      handoffRequested: claim.handoffRequested,
-    },
+    journey: ServiceJourneySchema.parse(journey),
+    context: { kind, story: session.story, source: meta.source, handoffRequested: session.handoffRequested },
   };
 }
 
 const StoredSession = z.object({
-  v: z.literal(2),
-  journeyId: z.string().regex(/^journey_[a-z0-9]+$/),
-  story: z.string().min(1).max(2000),
-  intelligence: z.unknown(),
-  evidence: z.partialRecord(z.enum(DOCUMENT_TYPES), z.object({
-    source: z.enum(['sample', 'upload', 'manual']),
-    filename: z.string().max(260),
-    fields: z.record(z.string(), z.string()).optional(),
-  })),
-  confirmed: z.boolean(),
-  handoffRequested: z.boolean(),
+  v: z.literal(3), journeyId: z.string().uuid(), createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(),
+  story: z.string().min(1).max(2000), understanding: z.unknown(), provider: z.enum(['demo', 'live']),
+  documents: z.array(DocumentSchema).max(DOCUMENT_TYPES.length), confirmed: z.boolean(), handoffRequested: z.boolean(),
 });
 
 export function serializeSession(session) {
-  const evidence = Object.fromEntries(Object.entries(session.claim.evidence).map(([type, e]) => {
-    const source = session.sources[type] ?? 'sample';
-    return [type, { source, filename: e.filename, ...(source === 'manual' ? { fields: e.fields } : {}) }];
-  }));
-  return JSON.stringify({
-    v: 2, journeyId: session.journeyId, story: session.claim.input, intelligence: session.claim.intelligence,
-    evidence, confirmed: session.claim.confirmed, handoffRequested: session.claim.handoffRequested,
-  });
+  return JSON.stringify({ v: 3, ...session });
 }
 
 /** Returns null for anything that does not validate — a stale or tampered tab simply starts over. */
 export function restoreSession(raw) {
   try {
     const stored = StoredSession.parse(JSON.parse(raw));
-    let session = { ...createSession(stored.story, validateUnderstanding(stored.intelligence)), journeyId: stored.journeyId };
-    for (const [type, e] of Object.entries(stored.evidence)) {
-      session = e.source === 'manual' ? applyManualDocument(session, type, e.fields) : applySampleDocument(session, type, e.filename, e.source);
-    }
-    if (stored.confirmed) session = confirmSession(session);
-    if (stored.handoffRequested) session = requestHandoff(session);
+    const session = { ...stored, understanding: validateUnderstanding(stored.understanding) };
+    delete session.v;
+    if (session.documents.some(d => !DOCUMENT_TYPES.includes(d.documentType))) return null;
+    if (session.confirmed && !readyForReview(session)) return null;
+    toSnapshot(session);
     return session;
   } catch {
     return null;

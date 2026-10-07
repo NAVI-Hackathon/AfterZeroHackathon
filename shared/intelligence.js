@@ -3,7 +3,9 @@ import { z } from 'zod';
 export const MAX_MESSAGE_LENGTH = 2000;
 export const DEFAULT_CONFIDENCE_THRESHOLD = 0.65;
 export const intentTypes = ['service_request', 'knowledge_query', 'unknown'];
-export const serviceTypes = ['flight_delay', 'vehicle_accident', 'payment_method_change', 'policy_change', 'policy_information', 'unknown'];
+export const serviceTypes = ['flight_delay', 'vehicle_accident', 'payment_method_change', 'policy_change', 'policy_information', 'hospitalization_claim', 'unknown'];
+// Service types that open a full NAVI journey (others get intent recognition only).
+export const SUPPORTED_SERVICE_TYPES = ['flight_delay', 'hospitalization_claim'];
 const field = z.string().trim().min(1).max(120).nullable();
 export const IntentDataSchema = z.object({
   intent: z.enum(intentTypes),
@@ -22,7 +24,7 @@ export const IntentDataSchema = z.object({
 export function intentDisposition(data, threshold = DEFAULT_CONFIDENCE_THRESHOLD) {
   if (data.intent === 'unknown' || data.serviceType === 'unknown') return 'clarification';
   if (data.confidence < threshold) return 'human_review';
-  return data.intent === 'service_request' && data.serviceType === 'flight_delay' ? 'supported' : 'preview';
+  return data.intent === 'service_request' && SUPPORTED_SERVICE_TYPES.includes(data.serviceType) ? 'supported' : 'preview';
 }
 
 export const UnderstandingSchema = z.object({

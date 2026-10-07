@@ -13,6 +13,7 @@ export const intentJsonSchema = z.toJSONSchema(IntentDataSchema.extend({ missing
 const aliases = {
   service_discovery: 'service_request', claim: 'service_request', service_navigation: 'service_request',
   information_query: 'knowledge_query', car_accident: 'vehicle_accident', flight_delay_claim: 'flight_delay', payment_change: 'payment_method_change',
+  hospital_claim: 'hospitalization_claim', hospitalization: 'hospitalization_claim', medical_claim: 'hospitalization_claim', inpatient_claim: 'hospitalization_claim',
 };
 const canonical = (value, values) => {
   const key = value.toLowerCase().replace(/[\s-]+/g, '_');

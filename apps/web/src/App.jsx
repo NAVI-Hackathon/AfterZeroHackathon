@@ -7,8 +7,8 @@ import Toast from './components/Toast.jsx';
 import { HandoffDialog, ProceedDialog, ReviewDialog, ServiceDialog } from './components/dialogs/JourneyDialogs.jsx';
 import { createApiAdapter, createMockAdapter, isDemoPath } from './services/adapters.js';
 import { analysisErrors } from './services/intelligence.js';
-import { intelligenceLabels } from './domain/intelligence.js';
-import { documentSpecs } from './mocks/flightDelay.js';
+import { serviceLabel } from './domain/intelligence.js';
+import { documentSpecs } from './mocks/hospitalClaim.js';
 
 const mode = isDemoPath(location.pathname) ? 'demo' : 'live';
 
@@ -25,8 +25,8 @@ function feedbackFor(understanding) {
   }
   return {
     kind: 'preview',
-    title: intelligenceLabels[understanding.data.serviceType],
-    body: `${understanding.data.summary} 這項服務的完整旅程尚未開放，你可以重新描述，或由專員協助。`,
+    title: serviceLabel(understanding.data.serviceType),
+    body: `${understanding.data.summary} 這項服務目前不在 NAVI 原型的服務範圍內，你可以重新描述，或由專員協助。`,
   };
 }
 
@@ -175,9 +175,12 @@ export default function App() {
           setTimeout(openPicker, 0);
           break;
         }
-        case 'REVIEW_DATA': setDialog('review'); break;
-        case 'PROCEED_TO_SERVICE': setDialog('proceed'); break;
-        case 'VIEW_SERVICE': setDialog('service'); break;
+        case 'PROVIDE_INFORMATION':
+          if (action.target === 'inpatient_info') setDocStates(s => ({ ...s, diagnosis_certificate: { status: 'manual' } }));
+          break;
+        case 'REVIEW_INFORMATION': setDialog('review'); break;
+        case 'PROCEED_TO_SERVICE': setDialog(snapshot?.context.kind === 'hospital' ? 'proceed' : 'service'); break;
+        case 'NONE': break;
         default: setDialog('handoff');
       }
     },

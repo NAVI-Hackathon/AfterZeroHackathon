@@ -1,45 +1,74 @@
 import { motion } from 'motion/react';
 import Icon from '../Icon.jsx';
-import { stages as flightStages } from '../../mocks/flightDelay.js';
+import { stages as hospitalStages } from '../../mocks/hospitalClaim.js';
 import { basicJourneys } from '../../mocks/basicJourneys.js';
-import { city, delayText } from '../../content/format.js';
+import { stayDays, stayText } from '../../content/format.js';
 import { CheckDraw } from '../../motion/primitives.jsx';
 import { fadeUp, staggerChildren, transition } from '../../motion/tokens.js';
 
-const serviceIcons = { flight_delay: 'plane', car_accident: 'car', payment_change: 'card', unknown: 'headset' };
+const serviceIcons = { hospital: 'medical', vehicle_accident: 'car', payment_method_change: 'card', unknown: 'headset' };
 
 /** Index of the step currently in progress, derived from the contract's currentStage. */
-export function activeStepIndex(journey, serviceKey) {
+export function activeStepIndex(journey, kind) {
   if (journey.currentStage === 'HUMAN_REVIEW') return 1;
-  if (serviceKey !== 'flight_delay') return 2;
+  if (kind !== 'hospital') return 2;
   return { EVIDENCE_COLLECTION: 2, READY_FOR_REVIEW: 3, READY_TO_PROCEED: 4 }[journey.currentStage] ?? 2;
 }
 
-function stepDescription(i, { journey, isFlight, basic }) {
+function hospitalStepText(i, journey) {
+  const hospital = journey.claimContext?.hospital;
   const ready = journey.currentStage === 'READY_FOR_REVIEW';
   const proceeding = journey.currentStage === 'READY_TO_PROCEED';
-  if (journey.currentStage === 'HUMAN_REVIEW') {
-    return ['已整理你的描述。', '這個情況需要專員確認適用的服務。', '', ''][i] ?? '';
-  }
-  if (!isFlight) {
-    return ['已整理你的需求。', `已辨識為「${basic.title}」。`, '先備妥右側列出的資料。', '', ''][i] ?? '';
-  }
   return [
-    '已整理你描述的情況。',
-    '班機延誤相關服務可能適用於你的情況。',
-    ready || proceeding ? '必要文件已備齊。' : '補齊登機證與航空公司延誤證明。',
-    proceeding ? '資料已確認完成。' : ready ? '請確認辨識出的資料是否正確。' : '文件備齊後進行確認。',
-    proceeding ? '可以前往既有理賠服務繼續辦理。' : '資料確認後，前往理賠服務入口。',
+    '已整理你描述的住院情況。',
+    hospital?.partner ? `${hospital.matchedName} 是醫起通合作醫院，可由醫院直接上傳文件。` : hospital ? `${hospital.mentioned} 不在醫起通合作名單，可改用理賠聯盟鏈或郵寄申請。` : '還不知道住院的醫院，上傳診斷書後會再確認。',
+    ready || proceeding ? '必要文件已備齊。' : '補齊診斷書或住院證明，以及匯款用的存摺影本。',
+    proceeding ? '資料已確認，保險金申請書已填妥。' : ready ? '請確認辨識出的資料，並填寫保險金申請書。' : '文件備齊後進行確認。',
+    proceeding ? '選擇申請管道，前往服務入口。' : '資料確認後，選擇醫起通、理賠聯盟鏈或郵寄申請。',
   ][i];
+}
+
+function basicStepText(i, journey, basic) {
+  if (journey.currentStage === 'HUMAN_REVIEW') return ['已整理你的描述。', '這個情況需要專員確認適用的服務。', '', ''][i] ?? '';
+  return ['已整理你的需求。', `已辨識為「${basic.title}」。`, '先備妥右側列出的資料。', '', ''][i] ?? '';
+}
+
+function ChannelList({ journey, onProceed }) {
+  const { channels, reminders } = journey.claimContext;
+  return (
+    <motion.div className="channels" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: transition.enter }}>
+      <ul>
+        {channels.map(channel => (
+          <li key={channel.id} className={channel.available ? '' : 'is-unavailable'}>
+            <div>
+              <strong>{channel.name}</strong>
+              {journey.nextAction.target === channel.id && <span className="tag tag-quiet">建議</span>}
+              {!channel.available && <span className="tag">非合作醫院</span>}
+            </div>
+            <p>{channel.notes[0]}</p>
+          </li>
+        ))}
+      </ul>
+      {reminders.length > 0 && (
+        <div className="reminders">
+          <p className="section-label"><Icon name="info" size={13} />容易漏掉的提醒</p>
+          <ul>{reminders.map(r => <li key={r}>{r}</li>)}</ul>
+        </div>
+      )}
+      <button type="button" className="button button-primary button-small" onClick={onProceed}>前往服務入口<Icon name="arrow" size={15} /></button>
+    </motion.div>
+  );
 }
 
 export default function JourneyTimeline({ snapshot, documentsSlot, onReview, onProceed, onViewService }) {
   const { journey, context } = snapshot;
-  const isFlight = context.serviceKey === 'flight_delay' && journey.currentStage !== 'HUMAN_REVIEW';
-  const basic = basicJourneys[journey.currentStage === 'HUMAN_REVIEW' && context.serviceKey !== 'flight_delay' ? 'unknown' : context.serviceKey] ?? basicJourneys.unknown;
-  const stages = context.serviceKey === 'flight_delay' ? flightStages : basic.stages;
-  const active = activeStepIndex(journey, context.serviceKey);
-  const reportedDelay = context.reported.delayMinutes;
+  const isHospital = context.kind === 'hospital' && journey.currentStage !== 'HUMAN_REVIEW';
+  const basic = basicJourneys[journey.currentStage === 'HUMAN_REVIEW' && context.kind !== 'hospital' ? 'unknown' : context.kind] ?? basicJourneys.unknown;
+  const stages = context.kind === 'hospital' ? hospitalStages : basic.stages;
+  const active = activeStepIndex(journey, context.kind);
+  const hospital = journey.claimContext?.hospital;
+  const certificate = journey.documents.find(d => d.documentType === 'diagnosis_certificate')?.fields;
+  const days = certificate ? stayDays(certificate.admissionDate, certificate.dischargeDate) : null;
 
   return (
     <section className="panel journey-panel" aria-labelledby="journey-title">
@@ -47,21 +76,26 @@ export default function JourneyTimeline({ snapshot, documentsSlot, onReview, onP
         <div>
           <p className="eyebrow">你的服務旅程</p>
           <h2 id="journey-title" className="journey-service">
-            <span className="service-icon"><Icon name={serviceIcons[context.serviceKey] ?? 'route'} size={18} /></span>
+            <span className="service-icon"><Icon name={serviceIcons[context.kind] ?? 'route'} size={18} /></span>
             {journey.title}
           </h2>
         </div>
         <span className="live-badge"><span className="pulse-dot" aria-hidden="true" />即時更新</span>
       </header>
 
-      {context.serviceKey === 'flight_delay' && (
+      {context.kind === 'hospital' && (
         <div className="trip-strip">
-          <div><span>航線</span><strong>{city(context.reported.origin)}<Icon name="arrow" size={14} />{city(context.reported.destination)}</strong></div>
           <div>
-            <span>{context.verifiedDelayMinutes === null ? '你描述的延誤' : '文件確認的延誤'}</span>
-            <motion.strong key={context.verifiedDelayMinutes ?? 'reported'} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0, transition: transition.enter }}>
-              {context.verifiedDelayMinutes === null ? (reportedDelay === null ? '待確認' : `約 ${delayText(reportedDelay)}`) : delayText(context.verifiedDelayMinutes)}
+            <span>住院醫院</span>
+            <strong>{hospital?.matchedName ?? hospital?.mentioned ?? certificate?.hospitalName ?? '待確認'}</strong>
+            {hospital && <small className={hospital.partner ? 'strip-note is-ok' : 'strip-note'}>{hospital.partner ? '醫起通合作醫院' : '非醫起通合作醫院'}</small>}
+          </div>
+          <div>
+            <span>{certificate ? '診斷書上的住院期間' : '住院期間'}</span>
+            <motion.strong key={days ?? 'pending'} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0, transition: transition.enter }}>
+              {days ? `${days} 天` : '待確認'}
             </motion.strong>
+            {certificate && <small className="strip-note">{stayText(certificate.admissionDate, certificate.dischargeDate)}</small>}
           </div>
         </div>
       )}
@@ -70,6 +104,7 @@ export default function JourneyTimeline({ snapshot, documentsSlot, onReview, onP
         {stages.map((stage, i) => {
           const done = i < active;
           const current = i === active;
+          const description = isHospital ? hospitalStepText(i, journey) : basicStepText(i, journey, basic);
           return (
             <motion.li key={stage} variants={fadeUp} className={`step ${done ? 'is-done' : ''} ${current ? 'is-current' : ''}`} aria-current={current ? 'step' : undefined}>
               <span className="step-marker" aria-hidden="true">
@@ -81,30 +116,22 @@ export default function JourneyTimeline({ snapshot, documentsSlot, onReview, onP
                   <h3>{stage}</h3>
                   <span className="step-state">{done ? '已完成' : current ? '進行中' : '尚未開始'}</span>
                 </div>
-                {stepDescription(i, { journey, isFlight, basic }) && <p className="step-text">{stepDescription(i, { journey, isFlight, basic })}</p>}
+                {description && <p className="step-text">{description}</p>}
 
-                {isFlight && i === 2 && documentsSlot}
+                {isHospital && i === 2 && documentsSlot}
 
-                {isFlight && i === 3 && (journey.currentStage === 'READY_FOR_REVIEW' || journey.currentStage === 'READY_TO_PROCEED') && (
+                {isHospital && i === 3 && (journey.currentStage === 'READY_FOR_REVIEW' || journey.currentStage === 'READY_TO_PROCEED') && (
                   <button type="button" className="button button-secondary button-small step-action" onClick={onReview}>
                     {journey.currentStage === 'READY_TO_PROCEED' ? '查看已確認資料' : '確認案件資料'}<Icon name="chevron" size={14} />
                   </button>
                 )}
 
-                {isFlight && i === 4 && journey.currentStage === 'READY_TO_PROCEED' && (
-                  <motion.div className="service-entry" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: transition.enter }}>
-                    <div>
-                      <strong>班機延誤理賠服務</strong>
-                      <p>由既有理賠服務接續審核，NAVI 已整理好案件資料。</p>
-                    </div>
-                    <button type="button" className="button button-primary button-small" onClick={onProceed}>前往服務入口<Icon name="arrow" size={15} /></button>
-                  </motion.div>
-                )}
+                {isHospital && i === 4 && journey.currentStage === 'READY_TO_PROCEED' && <ChannelList journey={journey} onProceed={onProceed} />}
 
-                {!isFlight && current && journey.currentStage !== 'HUMAN_REVIEW' && basic.steps.length > 0 && (
+                {!isHospital && current && journey.currentStage !== 'HUMAN_REVIEW' && basic.steps.length > 0 && (
                   <div className="basic-steps">
                     <ol>{basic.steps.map(step => <li key={step}>{step}</li>)}</ol>
-                    <button type="button" className="button button-secondary button-small" onClick={onViewService}>{journey.nextAction.type === 'HANDOFF' ? '轉由專員協助' : '查看辦理方式'}<Icon name="chevron" size={14} /></button>
+                    <button type="button" className="button button-secondary button-small" onClick={onViewService}>{journey.nextAction.type === 'CONTACT_SPECIALIST' ? '轉由專員協助' : '查看辦理方式'}<Icon name="chevron" size={14} /></button>
                   </div>
                 )}
               </div>
@@ -113,7 +140,7 @@ export default function JourneyTimeline({ snapshot, documentsSlot, onReview, onP
         })}
       </motion.ol>
 
-      <p className="safe-note"><Icon name="shield" size={15} />NAVI 協助整理資料與指引下一步；保障範圍與理賠結果，仍依保單條款與保險公司審核為準。</p>
+      <p className="safe-note"><Icon name="shield" size={15} />{journey.disclaimer}</p>
     </section>
   );
 }

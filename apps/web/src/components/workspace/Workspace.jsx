@@ -7,9 +7,9 @@ import ReadinessPanel, { ReadinessRing } from './ReadinessPanel.jsx';
 import NextActionCard from './NextActionCard.jsx';
 import DocumentCard from './DocumentCard.jsx';
 import { useBreakpoint } from '../../hooks/useBreakpoint.js';
+import { DOCUMENT_TYPES } from '../../mocks/hospitalClaim.js';
 import { transition } from '../../motion/tokens.js';
 
-const DOCUMENT_TYPES = ['boarding_pass', 'delay_certificate'];
 const mobileTabs = [
   { id: 'journey', label: '旅程', icon: 'route' },
   { id: 'documents', label: '文件', icon: 'document' },
@@ -32,8 +32,7 @@ export function DocumentList({ snapshot, docStates, busy, actions, registerInput
       {DOCUMENT_TYPES.map(type => (
         <DocumentCard
           key={type} type={type}
-          document={snapshot.documents.find(d => d.documentType === type)}
-          filename={snapshot.context.files[type]}
+          document={snapshot.journey.documents.find(d => d.documentType === type)}
           uiState={docStates[type]} busy={busy}
           onUpload={actions.upload} onRemove={actions.remove} onManual={actions.manual} onRetry={actions.resetDocument}
           registerInput={registerInput}
@@ -47,7 +46,7 @@ export function DocumentList({ snapshot, docStates, busy, actions, registerInput
 export default function Workspace({ snapshot, docStates, busy, tab, onTab, assistantOpen, onAssistantOpen, actions, registerInput, ref }) {
   const breakpoint = useBreakpoint();
   const { journey, context } = snapshot;
-  const hasDocuments = context.serviceKey === 'flight_delay' && journey.currentStage !== 'HUMAN_REVIEW';
+  const hasDocuments = context.kind === 'hospital' && journey.currentStage !== 'HUMAN_REVIEW';
   const heading = useRef(null);
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, []);
 
@@ -111,7 +110,7 @@ export default function Workspace({ snapshot, docStates, busy, tab, onTab, assis
             {mobileTabs.map(item => (
               <button key={item.id} id={`tab-${item.id}`} type="button" role="tab" aria-selected={tab === item.id} aria-controls={`tabpanel-${item.id}`} onClick={() => onTab(item.id)}>
                 <Icon name={item.icon} size={16} />{item.label}
-                {item.id === 'documents' && hasDocuments && <span className="tab-count">{snapshot.documents.length}/2</span>}
+                {item.id === 'documents' && hasDocuments && <span className="tab-count">{journey.documents.length}/{DOCUMENT_TYPES.length}</span>}
                 {tab === item.id && <motion.span className="tab-indicator" layoutId="tab-indicator" transition={transition.normal} />}
               </button>
             ))}

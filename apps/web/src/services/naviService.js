@@ -1,8 +1,7 @@
 import {
-  createSession, toSnapshot, supportsDocuments, applySampleDocument, applyManualDocument,
+  createSession, toSnapshot, journeyKind, supportsDocuments, applySampleDocument, applyManualDocument,
   removeDocument, confirmSession, requestHandoff, serializeSession, restoreSession,
 } from './journeyEngine.js';
-import { documents as documentFixtures } from '../domain/workflow.js';
 
 export class DocumentRecognitionError extends Error {
   constructor() { super('DOCUMENT_RECOGNITION_FAILED'); this.code = 'DOCUMENT_RECOGNITION_FAILED'; }
@@ -16,20 +15,22 @@ function wait(ms, signal) {
   });
 }
 
-/** Which outcomes open a workspace. Clarification and unmapped previews stay on the landing page. */
-export function opensJourney(understanding, snapshotServiceKey) {
+/** Which outcomes open a workspace. Clarification and services outside the prototype stay on the landing page. */
+export function opensJourney(understanding, kind) {
   const { outcome } = understanding.meta;
-  if (outcome === 'supported' || outcome === 'human_review') return true;
-  return outcome === 'preview' && snapshotServiceKey !== 'unknown';
+  if (outcome === 'clarification') return false;
+  if (outcome === 'human_review') return kind !== 'unknown';
+  return kind !== 'unknown';
 }
 
 /**
  * The single service the UI talks to. `understand` is the adapter-specific intent source;
- * journeys, documents and readiness come from the local engine until the backend provides them.
+ * journeys, documents and readiness come from the local engine.
  */
 export function createJourneyService({ mode, understand, storage, storageKey, documentDelayMs = 1000 }) {
   let session = null;
   let failNextDocument = false;
+  const provider = mode === 'live' ? 'live' : 'demo';
 
   function save() {
     try { if (session) storage?.setItem(storageKey, serializeSession(session)); else storage?.removeItem(storageKey); }
@@ -46,18 +47,17 @@ export function createJourneyService({ mode, understand, storage, storageKey, do
     },
     async analyze(message, { signal } = {}) {
       const understanding = await understand(message, { signal });
-      const candidate = createSession(message.trim(), understanding);
-      const snapshot = toSnapshot(candidate);
-      if (!opensJourney(understanding, snapshot.context.serviceKey)) return { understanding, snapshot: null };
+      const candidate = createSession(message, understanding, provider);
+      if (!opensJourney(understanding, journeyKind(candidate))) return { understanding, snapshot: null };
       return { understanding, snapshot: commit(candidate) };
     },
-    async uploadDocument(type, { filename, sample = false }, { signal } = {}) {
+    async uploadDocument(type, { file = null, sample = false } = {}, { signal } = {}) {
       const current = requireSession();
       if (!supportsDocuments(current)) throw new Error('This journey has no document workflow.');
       await wait(documentDelayMs, signal);
       if (failNextDocument) { failNextDocument = false; throw new DocumentRecognitionError(); }
-      // Recognition is mocked: the result always comes from the owned fixture, never from file contents.
-      return commit(applySampleDocument(current, type, sample ? documentFixtures[type].sampleName : filename, sample ? 'sample' : 'upload'));
+      const meta = sample || !file ? { entryMethod: 'sample' } : { filename: file.name, mimeType: file.type, size: file.size, entryMethod: 'upload' };
+      return commit(applySampleDocument(current, type, meta));
     },
     submitManual(type, fields) { return commit(applyManualDocument(requireSession(), type, fields)); },
     removeDocument(type) { return commit(removeDocument(requireSession(), type)); },

@@ -3,26 +3,30 @@ import { motion } from 'motion/react';
 import Icon from '../Icon.jsx';
 import Modal from './Modal.jsx';
 import { basicJourneys } from '../../mocks/basicJourneys.js';
-import { city, clockText, dateText, delayText } from '../../content/format.js';
+import { documentSpecs } from '../../mocks/hospitalClaim.js';
+import { claimApplicationForm } from '../../content/cardifData.js';
+import { maskAccount, stayDays, stayText } from '../../content/format.js';
 import { CheckDraw } from '../../motion/primitives.jsx';
 import { transition } from '../../motion/tokens.js';
 
-function docFields(snapshot, type) {
-  return snapshot.documents.find(d => d.documentType === type)?.fields ?? {};
-}
+const fieldsOf = (journey, type) => journey.documents.find(d => d.documentType === type)?.fields ?? {};
+const formName = claimApplicationForm?.name ?? '保險金申請書';
 
 export function ReviewDialog({ snapshot, onConfirm, onProceed, onClose }) {
-  const confirmed = snapshot.journey.currentStage === 'READY_TO_PROCEED';
-  const [checked, setChecked] = useState(confirmed);
-  const boarding = docFields(snapshot, 'boarding_pass');
-  const delay = docFields(snapshot, 'delay_certificate');
+  const { journey } = snapshot;
+  const confirmed = journey.currentStage === 'READY_TO_PROCEED';
+  const [dataChecked, setDataChecked] = useState(confirmed);
+  const [formChecked, setFormChecked] = useState(confirmed);
+  const cert = fieldsOf(journey, 'diagnosis_certificate');
+  const bank = fieldsOf(journey, 'bank_passbook');
+  const days = stayDays(cert.admissionDate, cert.dischargeDate);
   const rows = [
-    ['乘客姓名', boarding.passengerName],
-    ['航班', boarding.flightNumber],
-    ['航線', `${city(boarding.origin)} → ${city(boarding.destination)}`],
-    ['搭乘日期', dateText(boarding.departureDate)],
-    ['原訂／實際起飛', `${clockText(delay.scheduledDeparture)} → ${clockText(delay.actualDeparture)}`],
-    ['確認延誤', delayText(snapshot.context.verifiedDelayMinutes)],
+    ['病患姓名', cert.patientName],
+    ['醫院', cert.hospitalName],
+    ['住院期間', stayText(cert.admissionDate, cert.dischargeDate)],
+    ['住院天數', days ? `${days} 天` : null],
+    ['診斷', cert.diagnosis],
+    ['匯款帳戶', bank.bankName ? `${bank.bankName}　${maskAccount(bank.accountLast4)}（${bank.accountHolder}）` : null],
   ];
   return (
     <Modal title={confirmed ? '已確認的案件資料' : '確認案件資料'} onClose={onClose}>
@@ -31,27 +35,35 @@ export function ReviewDialog({ snapshot, onConfirm, onProceed, onClose }) {
         {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '待確認'}</dd></div>)}
       </dl>
       <div className="review-docs">
-        {snapshot.documents.map(d => (
-          <span key={d.id} className="tag tag-quiet"><Icon name="check" size={12} />{d.documentType === 'boarding_pass' ? '登機證' : '航空公司延誤證明'}{d.status === 'manual' ? '（手動輸入）' : ''}</span>
+        {journey.documents.map(d => (
+          <span key={d.id} className="tag tag-quiet"><Icon name="check" size={12} />{documentSpecs[d.documentType]?.title}{d.entryMethod === 'manual' ? '（手動輸入）' : ''}</span>
         ))}
       </div>
       {!confirmed && (
-        <label className="check-row">
-          <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} />
-          <span>我已確認以上資料正確（示範資料）。</span>
-        </label>
+        <>
+          <label className="check-row">
+            <input type="checkbox" checked={dataChecked} onChange={e => setDataChecked(e.target.checked)} />
+            <span>我已確認以上資料正確（示範資料）。</span>
+          </label>
+          <label className="check-row">
+            <input type="checkbox" checked={formChecked} onChange={e => setFormChecked(e.target.checked)} />
+            <span>我已下載並填妥{formName}。</span>
+          </label>
+        </>
       )}
       <div className="modal-actions">
         <p className="modal-footnote"><Icon name="shield" size={14} />確認資料不會送出理賠申請。</p>
         {confirmed
           ? <button type="button" className="button button-primary" onClick={onProceed}>前往服務入口<Icon name="arrow" size={16} /></button>
-          : <button type="button" className="button button-primary" disabled={!checked} onClick={onConfirm}>確認資料<Icon name="check" size={16} /></button>}
+          : <button type="button" className="button button-primary" disabled={!dataChecked || !formChecked} onClick={onConfirm}>確認資料<Icon name="check" size={16} /></button>}
       </div>
     </Modal>
   );
 }
 
 export function ProceedDialog({ snapshot, onClose, onDone }) {
+  const { journey } = snapshot;
+  const channel = journey.claimContext?.channels.find(c => c.id === journey.nextAction.target);
   return (
     <Modal title="前往服務入口" onClose={onClose}>
       <div className="proceed">
@@ -59,12 +71,12 @@ export function ProceedDialog({ snapshot, onClose, onDone }) {
           <CheckDraw size={26} strokeWidth={2.2} delay={0.1} />
         </motion.span>
         <h3>你的資料已準備完成</h3>
-        <p>NAVI 已整理好案件資料與 {snapshot.documents.length} 份文件。接下來由既有的班機延誤理賠服務接續處理，保險公司會依保單條款審核。</p>
+        <p>NAVI 已整理好案件資料與 {journey.documents.length} 份文件。接下來由法國巴黎人壽的理賠服務接續處理，並依保單條款審核。</p>
         <ul className="proceed-summary">
-          <li><span>服務</span><strong>班機延誤理賠服務</strong></li>
-          <li><span>確認延誤</span><strong>{delayText(snapshot.context.verifiedDelayMinutes)}</strong></li>
-          <li><span>準備完成度</span><strong>{snapshot.journey.readiness}%</strong></li>
+          <li><span>建議管道</span><strong>{channel?.name ?? '理賠服務'}</strong></li>
+          <li><span>準備完成度</span><strong>{journey.readiness}%</strong></li>
         </ul>
+        {channel && <ul className="proceed-notes">{channel.notes.map(note => <li key={note}>{note}</li>)}</ul>}
         <p className="modal-footnote"><Icon name="info" size={14} />本原型僅展示服務導引，不會連線正式平台或送出申請。</p>
         <button type="button" className="button button-primary full-width" onClick={onDone}>完成導引<Icon name="check" size={16} /></button>
       </div>
@@ -75,12 +87,13 @@ export function ProceedDialog({ snapshot, onClose, onDone }) {
 export function HandoffDialog({ snapshot, onPrepared, onClose }) {
   const [prepared, setPrepared] = useState(snapshot.context.handoffRequested);
   const { journey, context } = snapshot;
-  const collected = snapshot.documents.map(d => (d.documentType === 'boarding_pass' ? '登機證' : '航空公司延誤證明'));
-  const missing = journey.requirements.filter(r => r.status !== 'verified').map(r => r.name);
+  const collected = journey.documents.map(d => documentSpecs[d.documentType]?.title ?? d.documentType);
+  const missing = journey.requirements.filter(r => r.required && r.status !== 'verified').map(r => r.name);
   const summary = [
     'NAVI 服務摘要',
     `服務：${journey.title}`,
     `你的描述：${context.story}`,
+    ...(journey.claimContext?.hospital ? [`住院醫院：${journey.claimContext.hospital.matchedName ?? journey.claimContext.hospital.mentioned}`] : []),
     `已提供：${collected.join('、') || '尚未提供文件'}`,
     `尚待確認：${missing.join('、') || '保單保障條件'}`,
     '此為示範摘要，尚未送交專員。',
@@ -102,12 +115,12 @@ export function HandoffDialog({ snapshot, onPrepared, onClose }) {
         <div><dt>已提供</dt><dd>{collected.join('、') || '尚未提供文件'}</dd></div>
         <div><dt>尚待確認</dt><dd>{missing.join('、') || '保單保障條件'}</dd></div>
       </dl>
-      {prepared ? (
+      {prepared && (
         <motion.div className="success-note" role="status" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: transition.enter }}>
           <CheckDraw size={16} strokeWidth={2.4} />
           <div><strong>服務摘要已準備完成</strong><p>本示範不會實際聯繫專員，你可以下載摘要。</p></div>
         </motion.div>
-      ) : null}
+      )}
       <div className="modal-actions">
         <button type="button" className="button button-secondary" onClick={download}><Icon name="download" size={16} />下載摘要</button>
         {!prepared && <button type="button" className="button button-primary" onClick={() => { setPrepared(true); onPrepared(); }}>準備轉交<Icon name="arrow" size={16} /></button>}
@@ -117,7 +130,7 @@ export function HandoffDialog({ snapshot, onPrepared, onClose }) {
 }
 
 export function ServiceDialog({ snapshot, onHandoff, onClose }) {
-  const basic = basicJourneys[snapshot.context.serviceKey] ?? basicJourneys.unknown;
+  const basic = basicJourneys[snapshot.context.kind] ?? basicJourneys.unknown;
   return (
     <Modal title={basic.title} onClose={onClose}>
       <p className="modal-lead">{snapshot.journey.nextAction.description}</p>

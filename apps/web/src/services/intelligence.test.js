@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { understandIntent, waitForAnalysis } from './intelligence.js';
 import { demoFallback } from '../domain/intelligence.js';
 
-const message = '班機延誤七小時';
+const message = '我上週在台中榮總住院五天，要怎麼申請理賠？';
 const ai = { ...demoFallback(message), meta: { ...demoFallback(message).meta, source: 'gemini' } };
 test('client posts bounded trimmed input and validates the NAVI contract', async () => {
   let seen;
@@ -24,7 +24,7 @@ test('network failure, invalid JSON, provider error and timeout are recoverable'
   finally { clearTimeout(keepAlive); }
 });
 
-test('demo fallback requires explicit opt-in, is visible in metadata and is flight-only', async () => {
+test('demo fallback requires explicit opt-in, is visible in metadata and is golden-path only', async () => {
   const unavailable = async () => Response.json({ success: false, error: { code: 'AI_NOT_CONFIGURED' } }, { status: 503 });
   await assert.rejects(understandIntent(message, { fetchImpl: unavailable }), { code: 'AI_NOT_CONFIGURED' });
   assert.equal((await understandIntent(message, { fetchImpl: unavailable, enableFallback: true })).meta.source, 'demo_fallback');

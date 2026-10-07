@@ -51,7 +51,8 @@ function useReadinessDelta(value) {
 
 function RequirementList({ requirements }) {
   const done = requirements.filter(r => r.status === 'verified');
-  const pending = requirements.filter(r => r.status !== 'verified');
+  const pending = requirements.filter(r => r.status !== 'verified' && r.required);
+  const optional = requirements.filter(r => r.status !== 'verified' && !r.required);
   return (
     <div className="requirements">
       {done.length > 0 && (
@@ -72,8 +73,18 @@ function RequirementList({ requirements }) {
           <ul>
             {pending.map(r => (
               <motion.li layout="position" key={r.id} className="requirement" transition={transition.normal}>
-                <span className="requirement-mark" aria-hidden="true" />{r.name}{!r.required && <small>選填</small>}
+                <span className="requirement-mark" aria-hidden="true" />{r.name}
               </motion.li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {optional.length > 0 && (
+        <div className="requirement-group is-optional">
+          <h3>依情況準備</h3>
+          <ul>
+            {optional.map(r => (
+              <li key={r.id} className="requirement"><span className="requirement-mark" aria-hidden="true" />{r.name}</li>
             ))}
           </ul>
         </div>
@@ -84,7 +95,7 @@ function RequirementList({ requirements }) {
 
 export default function ReadinessPanel({ snapshot, busy, onAction, onSample, onHandoff, showNextAction = true }) {
   const { journey } = snapshot;
-  const isFlight = snapshot.context.serviceKey === 'flight_delay' && journey.currentStage !== 'HUMAN_REVIEW';
+  const isHospital = snapshot.context.kind === 'hospital' && journey.currentStage !== 'HUMAN_REVIEW';
   const delta = useReadinessDelta(journey.readiness);
   const complete = journey.currentStage === 'READY_TO_PROCEED';
   const missing = journey.requirements.filter(r => r.required && r.status !== 'verified').length;
@@ -92,10 +103,10 @@ export default function ReadinessPanel({ snapshot, busy, onAction, onSample, onH
   return (
     <aside className="panel readiness-panel" aria-labelledby="readiness-title">
       <header className="panel-header">
-        <h2 id="readiness-title">{isFlight ? '準備完成度' : '需要準備的資料'}</h2>
+        <h2 id="readiness-title">{isHospital ? '準備完成度' : '需要準備的資料'}</h2>
       </header>
 
-      {isFlight ? (
+      {isHospital ? (
         <div className="readiness-summary">
           <div className="ring-wrap">
             <ReadinessRing value={journey.readiness} />
@@ -125,7 +136,7 @@ export default function ReadinessPanel({ snapshot, busy, onAction, onSample, onH
       {showNextAction && <NextActionCard action={journey.nextAction} complete={complete} busy={busy} onAction={onAction} onSample={onSample} />}
 
       <p className="readiness-note"><Icon name="shield" size={14} />準備完成度代表資料完整度，不代表理賠核准或保障判斷。</p>
-      {journey.nextAction.type !== 'HANDOFF' && (
+      {journey.nextAction.type !== 'CONTACT_SPECIALIST' && (
         <button type="button" className="link-button specialist-link" onClick={onHandoff}>
           <Icon name="headset" size={16} />需要協助？轉由專員接續<Icon name="chevron" size={14} />
         </button>
