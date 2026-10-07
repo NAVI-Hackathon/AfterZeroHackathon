@@ -1,3 +1,4 @@
+import { setTimeout as backoff } from 'node:timers/promises';
 import { ApiError } from '../middleware/errorHandler.js';
 
 // Enforce a deadline even if a provider implementation fails to honor its AbortSignal.
@@ -30,11 +31,13 @@ export function requestValidatedAI(task, options) {
         if (signal?.aborted) throw error;
         const invalid = error.name === 'ZodError' || error.code === 'AI_RESPONSE_INVALID';
         const transient = error.code === 'AI_PROVIDER_ERROR' && error.retryable;
-        if (!invalid && !transient) throw error;
+        const rateLimited = error.code === 'AI_RATE_LIMITED' && error.retryable;
+        if (!invalid && !transient && !rateLimited) throw error;
         if (attempt === 1) {
           if (invalid) throw new ApiError('AI_RESPONSE_INVALID', '分析結果尚不完整，請重新分析。');
           throw error;
         }
+        if (rateLimited) await backoff(options.config.rateLimitBackoffMs ?? 1000, undefined, { signal });
       }
     }
   }, options);

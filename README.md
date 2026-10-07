@@ -33,18 +33,18 @@ docs/                 架構、展示、QA 與整合紀錄
 npm install
 # 首次設定：檔案已存在時勿覆蓋
 cp apps/api/.env.example apps/api/.env
-# 在 apps/api/.env 填入 GEMINI_API_KEY（只放 Backend）
+# 預設 Demo 不需要 API Key；Live 設定見 Zero-Cost Architecture
 npm run dev:navi
 ```
 
 主產品 URL：**http://127.0.0.1:5173/**。Backend：http://127.0.0.1:3001/api/health。
 `npm run dev` 仍是原本 NAVI 的啟動捷徑；`dev:web`、`dev:api` 可分別啟動。整合啟動的 API 不監看檔案，修改 Backend 或 `.env` 後請重新啟動；`dev:api` 則保留開發監看。
 
-**Developer B Phase 2 已完成 Backend AI 整合**：`AI_MODE=live` 使用真實 Gemini Intent、PDF / PNG / JPEG / WebP 文件抽取、JSON grounded knowledge 與 server-owned Journey；`AI_MODE=demo npm run dev:navi` 可在沒有 Key 時跑原固定示範（或 `AI_MODE=demo npm run dev:all` 同時啟兩站）。Live 失敗不會偷偷轉 Demo。
+**Developer B Phase 2 已完成 Backend AI 整合；Phase 3 已加入零成本防護與本地評估**。`dev`／`dev:navi`／`dev:all`／`dev:api` 一律以 Demo 啟動，不受舊 `.env` 的 `AI_MODE=live` 影響，也不送出 Gemini 請求。Free Tier 設定確認後，需人工執行 `npm run dev:live` 才啟用真實 Intent、文件抽取、JSON grounded knowledge 與 server-owned Journey。Live 失敗不會偷偷轉 Demo。
 
-**目前工作區仍使用原 Mock 文件與瀏覽器 workflow**；入口 Intent 已接 Live API。真實文件與 server-owned Journey 已可從 HTTP / CLI 驗證，Developer A 的工作區 adapter 尚未串接。本階段沒有重做 UI。[完整 Backend Phase 2 文件](docs/backend-ai-phase-2.md)包含契約、設定、實測與限制。
+**目前工作區仍使用原 Mock 文件與瀏覽器 workflow**；入口 Intent 使用 Backend API，依明確啟動模式區分 Demo／Live。真實文件與 server-owned Journey 已可從 HTTP / CLI 驗證，Developer A 的工作區 adapter 尚未串接。本階段沒有重做 UI。[完整 Backend Phase 2 文件](docs/backend-ai-phase-2.md)包含契約、設定、實測與限制。
 
-Backend 設定集中於 `apps/api/src/config/env.js`，範例在 `apps/api/.env.example`；預設 `gemini-3.5-flash-lite` / minimal thinking，整體 AI deadline 10 秒。`.env` 只在本機，不能 commit。未設定 Key 時分析 API 明確回覆未配置，health 僅表示設定存在，不代表供應商連線成功。
+Backend 設定集中於 `apps/api/src/config/env.js`，範例在 `apps/api/.env.example`；預設 `gemini-3.5-flash-lite` / minimal thinking，整體 AI deadline 10 秒。`.env` 只在本機，不能 commit。Live 未設定 Key 或未確認 Free Tier 時不允許外部請求；Demo 不需要 Key。health 的配置欄位僅表示 Key 存在，不代表供應商連線成功或 Billing 狀態。
 
 前端設定在 `apps/web/.env.example`；`/api` 由 Vite proxy 連到 3001，production 需部署同 origin reverse proxy 或設定 `VITE_API_BASE_URL`。Key 不可放進 `VITE_*`。
 
@@ -92,7 +92,7 @@ npm run dev:all
 4. 上傳登機證（目前仍 Mock）→ **70%**；上傳延誤證明（Mock）→ **90%**；確認案件資料 → **100%**；前往服務僅開啟導引預覽，不送件。
 5. NAVI 右上選單「重新開始示範」可清除本分頁進度。reload 保留 sessionStorage；不同 tab 的案件分開。
 
-模擬官網的既有理賠資料與 NAVI 班機延誤示範資料是不同資料集，不能據此宣稱該公司承保旅遊延誤。未配置 Gemini 時，請先按下方方式**明確啟用示範備援**；備援畫面會標記本次未使用 AI。
+模擬官網的既有理賠資料與 NAVI 班機延誤示範資料是不同資料集，不能據此宣稱該公司承保旅遊延誤。預設由 Backend Demo Provider 回應，API metadata 標記 `demo_fallback`。若要演示 Backend 斷線時的前端備援，另依下方方式明確啟用；目前沒有新增 UI 模式指示。
 
 ## 測試與 Build
 
@@ -109,19 +109,23 @@ npm run lint              # Mock Website 既有 ESLint
 npm run typecheck:mock    # Mock Website TypeScript
 npm run test:sites        # 先啟動 dev:all；雙站路由、資產、API proxy smoke checks
 npm run preview           # 只預覽 build，不會自動提供 API；需另啟 API / 設定部署 proxy
-npm run test:integration  # 真實 Gemini：5 個中英文 / 其他需求 / Unknown 測試
-npm run test:ai           # 真實 Gemini：Intent + 測試 PDF + 35→70→90→100 + grounded knowledge
+npm run eval:ai:local     # 預設：120 個合成 fixture / deterministic cases，零 Gemini 請求
+npm run eval:ai:live -- --plan # 只顯示 9 個案例計畫，零請求
+npm run eval:ai:live      # 人工確認 Free Tier 後才可執行，含 retry 最多 12 次
+npm run ai:status        # 本地配置檢查，不驗證帳戶或呼叫 Gemini
+npm run test:integration  # 相容舊指令：現在執行 Local evaluation
+npm run test:ai           # 相容舊指令：現在執行 Local evaluation
 ```
 
-一般測試使用注入的 Mock Provider，驗證中英班機延誤、車禍、信用卡扣款變更、Unknown、驗證／錯誤／超時／CORS／rate limit 與原有 Golden Path。**Mock Provider 測試不代表模型實際理解能力已驗證。** 真實測試會呼叫 Gemini，輸出測試類型、結果與耗時，不輸出 key 或完整使用者內容。
+一般測試使用注入的 Mock Provider，驗證中英班機延誤、車禍、信用卡扣款變更、Unknown、驗證／錯誤／超時／CORS／rate limit 與原有 Golden Path。**Mock Provider 測試不代表模型實際理解能力已驗證。** `npm test` 加入外網 fetch 防護，只允許 loopback HTTP 與注入 Mock。Live sample 需明確執行、顯示計畫與上限；不輸出 key 或完整使用者內容。
 
-Developer B Phase 2 QA：Frontend 10/10、Backend 52/52；真實 Gemini 5 項 Intent 及完整 API Golden Path / grounded knowledge 已通過。測試文件為程式建立的 synthetic PDF，不是實際旅客資料；完整紀錄與已知限制見 [Backend AI Phase 2](docs/backend-ai-phase-2.md)。
+歷史 Developer B Phase 2 QA（不是本次 Phase 3 Live 結果）：Frontend 10/10、Backend 52/52；真實 Gemini 5 項 Intent 及完整 API Golden Path / grounded knowledge 已通過。測試文件為程式建立的 synthetic PDF，不是實際旅客資料；完整紀錄與已知限制見 [Backend AI Phase 2](docs/backend-ai-phase-2.md)。
 
 ## Golden Path
 
 輸入「我昨天從東京回台灣，班機延誤七個小時，不知道可以怎麼處理。」→ API 理解 → 班機延誤工作區 **35%** → Mock 登機證 **70%** → Mock 延誤證明 **90%**（14:20 → 21:43 = 7 小時 23 分）→ Review **100%** → 既有理賠服務導引預覽。
 
-100% 只代表資料完整，Workflow 仍停在 `READY_FOR_REVIEW`，不判斷保障、理賠資格、核准或送出申請。移除／替換文件會撤回分數與確認。目前 UI 文件不會讀取或上傳；真實自然語言描述會送到 Gemini。使用 Backend 文件 API 時，文件 bytes 會在本次 request 傳送至 Gemini，Repository 不儲存 bytes。FAQ 與來源面板仍標明示範知識庫。
+100% 只代表資料完整，Workflow 仍停在 `READY_FOR_REVIEW`，不判斷保障、理賠資格、核准或送出申請。移除／替換文件會撤回分數與確認。目前 UI 文件不會讀取或上傳；只有明確啟用 Live 並通過 Free Tier guard 時，自然語言描述才會送到 Gemini。使用 Live Backend 文件 API 時，文件 bytes 會在本次 request 傳送至 Gemini；Demo 只讀指定 fixture，Repository 不儲存 bytes。FAQ 與來源面板仍標明示範知識庫。
 
 其他已辨識需求只顯示「目前 Prototype 尚未開放完整服務旅程」，不展示假的完整 Workflow。模糊需求顯示「我還需要一些資訊」；低信心已知需求進入專員確認。真人接續僅準備本機摘要，不會聯絡專員。
 
@@ -148,7 +152,7 @@ VITE_ENABLE_DEMO_FALLBACK=true
 ```text
 apps/web/src/            Premium React UI、純 workflow、API client 與 tests
 apps/api/src/            Express、providers / prompts / validation / workflow / repository / knowledge
-apps/api/test/           Mock Provider contract / transport tests、手動真實 integration
+apps/api/test/           Mock Provider contract / transport / zero-cost tests
 shared/intelligence.js  共用 Zod schema、enums、mapping 與 threshold default
 scripts/dev.js          無額外依賴的 NAVI／雙站開發啟動
 knowledge/              Mock 文件、FAQ、來源與既有準備度規則
@@ -157,9 +161,46 @@ docs/                   架構、產品、展示與各階段 QA 記錄
 
 Premium Dark UI、繁中／英文輔助、CSS Motion System、Reduced Motion、桌面三欄、手機 Tabs、來源面板與 Demo Reset 全部保留。既有進度仍使用同分頁 `sessionStorage`，reload 保留 validated AI facts 與 mock documents；不儲存文件位元組。
 
-詳見 [真實架構](docs/architecture.md)、[展示腳本](docs/demo-script.md) 與 [Phase 2A 報告](docs/phase-2a-report.md)。歷史 Phase 2A 文件保留；目前能力以 [Developer B Phase 2](docs/backend-ai-phase-2.md) 為準。RAG / Vector DB / MongoDB / Auth / Multi-Agent 未實作。
+詳見 [真實架構](docs/architecture.md)、[展示腳本](docs/demo-script.md) 與 [Phase 2A 報告](docs/phase-2a-report.md)。歷史 Phase 2A 文件保留；AI 契約以 [Developer B Phase 2](docs/backend-ai-phase-2.md) 為準，最新啟動、成本防護與評估以 [Phase 3](docs/backend-ai-phase-3.md) 為準。RAG / Vector DB / MongoDB / Auth / Multi-Agent 未實作。
 
 
 ## 整合與協作
 
 `3a09337` 的模擬官網成果已合併，NAVI 與 Mock Website 以 npm workspaces 分開。根目錄 Next.js 起始設定搬到 `apps/mock-site`，不再干擾 NAVI。兩種助手契約用途不同，沒有強行合併；原 `SPEC.md`／`AGENTS.md` 保留作為團隊規格紀錄，現有可執行入口以本 README 為準。完整差異與驗證見 [整合報告](docs/repository-integration.md)。
+
+## Zero-Cost Architecture
+
+NAVI prototype is intentionally designed to run using free-tier and local components only, **subject to provider free-tier availability and quotas**.
+
+- Gemini Developer API `gemini-3.5-flash-lite` Free Tier，minimal thinking；僅限未啟用 Billing 的專案。
+- Demo Provider、Local JSON Knowledge Base、InMemory state、本地 synthetic fixtures，不需要外部服務。
+- 無 paid search / Maps grounding、paid vector DB、paid OCR、付費儲存、Batch、付費 Context Caching、Vertex AI 或其他付費 AI fallback。
+- `ALLOW_PAID_AI=false`；設為 true 直接拒絕配置，不能啟用付費能力。
+- `CI=true` 時禁止 Live，unit tests 另阻擋外網 fetch；不新增 GitHub Actions 或雲端部署依賴。
+
+**API Key 無法證明帳戶是 Free Tier。** 工具不會查帳戶、啟用 Billing 或建立雲端資源。Live 前需自行在 AI Studio 確認 Key 所屬專案為 Free Tier、未啟用 Billing；只有確認後才在本機 `apps/api/.env` 設定：
+
+```dotenv
+AI_MODE=live
+GEMINI_API_KEY=<backend-only key>
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_FREE_TIER_CONFIRMED=true
+ALLOW_PAID_AI=false
+LIVE_AI_REQUEST_LIMIT=12
+```
+
+```sh
+npm run ai:status              # 不發請求；billingVerifiedByTool 永遠 false
+npm run eval:ai:live -- --plan # 不發請求；固定 5 Intent + 2 文件 + 2 Knowledge
+npm run eval:ai:live           # 最多 12 次，所有 retry 共用 budget
+npm run eval:ai:live -- --refresh # 明確略過本地 cache；仍受同一上限
+npm run dev:live               # 人工啟動 Live NAVI；每個 API process 也最多 12 次
+```
+
+`npm run eval:ai`／`eval:ai:local`／`test:ai`／`test:integration` 預設全部 Local。Live 使用固定 9 個合成案例，不會跑完整 120-case dataset；未確認 Free Tier 時直接阻擋。`MAX_LIVE_EVAL_REQUESTS_PER_RUN` 可作為 limit 的別名，`LIVE_AI_REQUEST_LIMIT` 優先；程式不會自動增加上限或重設 budget。API process 的 budget 涵蓋所有使用者與功能，只有人工重啟才重置。
+
+本地 `apps/api/eval/cache/` 只用於 curated synthetic evaluation，不用於使用者文件。Key 包含 model、prompt version、實際 prompt、input 與 schema，schema 合法的 raw response 才會寫入；重讀仍驗證，來源與預期結果仍需通過下游檢查。Cache／reports 不進 Git。429 最多等待 1 秒後 retry 一次；仍失敗即 `AI_RATE_LIMITED`，停止該 Live evaluation，不改用付費 Provider。
+
+Phase 3 本地結果：120/120 合成案例通過，Golden Path 35→70→90→100；**本次未執行 Live Gemini，新增 Gemini 請求 0 次**。Local fixtures 與 cached replay 均不計為本次模型能力驗證；Live 僅報小樣本 passed count 與 fresh-call p50/p95，不宣稱完整 AI accuracy。詳見 [零成本評估文件](docs/backend-ai-phase-3.md)。
+
+Free Tier 價格與配額由供應商決定，請核對 [Google pricing](https://ai.google.dev/gemini-api/docs/pricing)、[billing](https://ai.google.dev/gemini-api/docs/billing) 與 [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits)。若不能確認零成本，使用 Demo／Local；程式中的人工確認 flag 不是帳戶帳務驗證，也無法阻止帳戶日後被他人啟用 Billing。
