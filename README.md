@@ -38,7 +38,7 @@ npm run dev:navi
 ```
 
 主產品 URL：**http://127.0.0.1:5173/**。Backend：http://127.0.0.1:3001/api/health。
-`npm run dev` 仍是原本 NAVI 的啟動捷徑；`dev:web`、`dev:api` 可分別啟動。
+`npm run dev` 仍是原本 NAVI 的啟動捷徑；`dev:web`、`dev:api` 可分別啟動。整合啟動的 API 不監看檔案，修改 Backend 或 `.env` 後請重新啟動；`dev:api` 則保留開發監看。
 
 Backend 設定集中於 `apps/api/src/config/env.js`，範例在 `apps/api/.env.example`；Gemini 模型與 threshold 沿用現有設定。未設定 key 時 health 正常、分析 API 明確回覆未配置，不會冒充 AI 成功。
 
@@ -92,6 +92,8 @@ npm run dev:all
 
 ## 測試與 Build
 
+執行 Mock Website build／typecheck 前，先停止其 dev 程序；避免 Next 產生的型別與開發程序同時更新。
+
 ```sh
 npm test                  # Frontend + Backend，完全不需要 API Key
 npm run test:web
@@ -138,7 +140,7 @@ apps/web/src/            Premium React UI、純 workflow、API client 與 tests
 apps/api/src/            Express app、config、intent schema / service、Gemini provider、error handler
 apps/api/test/           Mock Provider contract / transport tests、手動真實 integration
 shared/intelligence.js  共用 Zod schema、enums、mapping 與 threshold default
-scripts/dev.js          無額外依賴的雙程序開發啟動
+scripts/dev.js          無額外依賴的 NAVI／雙站開發啟動
 knowledge/              Mock 文件、FAQ、來源與既有準備度規則
 docs/                   架構、產品、展示與各階段 QA 記錄
 ```
