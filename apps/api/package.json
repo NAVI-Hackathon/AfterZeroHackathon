@@ -7,7 +7,8 @@
     "dev": "node --env-file-if-exists=.env --watch src/server.js",
     "start": "node --env-file-if-exists=.env src/server.js",
     "test": "node --test test/*.test.js",
-    "test:integration": "node --env-file-if-exists=.env test/integration.js"
+    "test:integration": "node --env-file-if-exists=.env test/integration.js",
+    "test:ai": "node --env-file-if-exists=.env scripts/test-gemini.js"
   },
   "engines": {
     "node": ">=22.12"

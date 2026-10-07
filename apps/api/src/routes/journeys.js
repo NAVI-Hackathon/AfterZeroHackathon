@@ -6,6 +6,8 @@ import { understandIntent } from '../services/intent.service.js';
 import { createJourneyService } from '../services/journeyService.js';
 import { parseUpload } from '../services/documentService.js';
 import { retrieveKnowledge } from '../services/knowledgeService.js';
+import { answerKnowledge } from '../services/knowledgeAnswerService.js';
+import { enhanceHandoff } from '../services/handoffService.js';
 import { ApiError } from '../middleware/errorHandler.js';
 
 function validate(schema, body) {
@@ -40,7 +42,14 @@ export function createJourneyRouter({ config, provider, repository }) {
     validate(ReviewRequestSchema, req.body);
     res.json(service.review(req.params.id));
   });
-  router.get('/journeys/:id/handoff-summary', (req, res) => res.json(service.handoffSummary(req.params.id)));
+  router.get('/journeys/:id/handoff-summary', async (req, res) => {
+    const summary = service.handoffSummary(req.params.id);
+    res.json(req.query.enhance === 'true' ? await enhanceHandoff(summary, { provider, config, signal: requestSignal(res) }) : summary);
+  });
+  router.post('/knowledge/answer', async (req, res) => {
+    const { question } = validate(z.object({ question: z.string().trim().min(1).max(500) }).strict(), req.body);
+    res.json(await answerKnowledge(question, { provider, config, signal: requestSignal(res) }));
+  });
   router.get('/knowledge', (req, res) => res.json(retrieveKnowledge(validate(z.string().trim().min(1).max(500), req.query.query))));
   return router;
 }

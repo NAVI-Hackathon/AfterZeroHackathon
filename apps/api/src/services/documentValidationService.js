@@ -1,0 +1,25 @@
+const clock = /^([01]\d|2[0-3]):([0-5]\d)$/;
+export function calculateDelayMinutes(fields) {
+  const { scheduledDeparture, actualDeparture, departureDate, actualDepartureDate } = fields;
+  if (!scheduledDeparture || !actualDeparture) return null;
+  let minutes;
+  if (clock.test(scheduledDeparture) && clock.test(actualDeparture)) {
+    const value = time => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+    const days = actualDepartureDate && departureDate ? (Date.parse(actualDepartureDate) - Date.parse(departureDate)) / 86400000 : 0;
+    // Never silently assume an overnight delay from clock times alone.
+    minutes = days * 1440 + value(actualDeparture) - value(scheduledDeparture);
+  } else if (!clock.test(scheduledDeparture) && !clock.test(actualDeparture)) {
+    minutes = (Date.parse(actualDeparture) - Date.parse(scheduledDeparture)) / 60000;
+  }
+  return Number.isFinite(minutes) && minutes >= 0 && minutes <= 525600 ? Math.round(minutes) : null;
+}
+export function travelInformationComplete(document) {
+  return document?.documentType === 'boarding_pass' && ['passengerName', 'flightNumber', 'origin', 'destination', 'departureDate'].every(key => Boolean(document.fields[key]));
+}
+export function documentVerified(document, threshold) {
+  const fields = document.fields;
+  const sufficient = document.documentType === 'boarding_pass'
+    ? Boolean(fields.flightNumber || (fields.origin && fields.destination))
+    : document.documentType === 'delay_certificate' && calculateDelayMinutes(fields) !== null;
+  return Boolean(sufficient && document.confidence >= threshold);
+}

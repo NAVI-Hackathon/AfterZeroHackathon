@@ -3,7 +3,7 @@ import { ApiError } from '../middleware/errorHandler.js';
 // Enforce a deadline even if a provider implementation fails to honor its AbortSignal.
 export async function withProviderDeadline(task, { config, signal }) {
   const deadline = AbortSignal.timeout(config.timeoutMs);
-  const combined = AbortSignal.any([deadline, signal]);
+  const combined = signal ? AbortSignal.any([deadline, signal]) : deadline;
   let onAbort;
   try {
     combined.throwIfAborted();
@@ -14,9 +14,28 @@ export async function withProviderDeadline(task, { config, signal }) {
     return await Promise.race([task(combined), cancelled]);
   } catch (error) {
     if (deadline.aborted) throw new ApiError('AI_TIMEOUT', '分析時間較長，請重新嘗試。', 504);
-    if (signal.aborted) throw new ApiError('REQUEST_CANCELLED', '分析已取消。', 499, false);
+    if (signal?.aborted) throw new ApiError('REQUEST_CANCELLED', '分析已取消。', 499, false);
     throw error;
   } finally {
     if (onAbort) combined.removeEventListener('abort', onAbort);
   }
+}
+
+// One shared deadline covers both attempts; no nested retries or hidden demo substitution.
+export function requestValidatedAI(task, options) {
+  return withProviderDeadline(async signal => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { return await task(signal); }
+      catch (error) {
+        if (signal?.aborted) throw error;
+        const invalid = error.name === 'ZodError' || error.code === 'AI_RESPONSE_INVALID';
+        const transient = error.code === 'AI_PROVIDER_ERROR' && error.retryable;
+        if (!invalid && !transient) throw error;
+        if (attempt === 1) {
+          if (invalid) throw new ApiError('AI_RESPONSE_INVALID', '分析結果尚不完整，請重新分析。');
+          throw error;
+        }
+      }
+    }
+  }, options);
 }

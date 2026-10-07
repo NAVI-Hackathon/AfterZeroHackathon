@@ -26,7 +26,8 @@
     "build:all": "npm run build:navi && npm run build:mock",
     "lint": "npm run lint --workspace @navi/mock-site",
     "typecheck:mock": "npm run typecheck --workspace @navi/mock-site",
-    "test:sites": "node scripts/verify-sites.js"
+    "test:sites": "node scripts/verify-sites.js",
+    "test:ai": "npm run test:ai --workspace @navi/api --"
   },
   "engines": {
     "node": ">=22.12"

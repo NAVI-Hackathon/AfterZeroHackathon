@@ -9,12 +9,12 @@ NAVI — AI Service Journey Navigator · Understand. Guide. Resolve.
 ```text
 apps/
   web/                 NAVI：React / Vite，Premium UI、工作區、Golden Path
-  api/                 NAVI：Express / Gemini 意圖理解 API
+  api/                 NAVI：Express / Gemini、server-owned Journey 與文件辨識 API
   mock-site/           Mock Website：Next.js / TypeScript / Tailwind
     app/(site)/        模擬官網 8 頁與服務分頁
     components/site/   模擬站導覽、Tabs、data-tour-id、示意下載
     public/            原有靜態資產
-shared/intelligence.js NAVI 共用 Zod 契約與 deterministic routing
+shared/               NAVI Intent / Journey / 文件共用 Zod 契約
 lib/contracts/         原模擬服務助手契約（保留，未改成 NAVI 契約）
 lib/db/、lib/env.ts     原團隊的資料庫／環境規格骨架，尚未接入現有服務
 data/                  模擬官網本地 seed、爬蟲輸出
@@ -40,9 +40,11 @@ npm run dev:navi
 主產品 URL：**http://127.0.0.1:5173/**。Backend：http://127.0.0.1:3001/api/health。
 `npm run dev` 仍是原本 NAVI 的啟動捷徑；`dev:web`、`dev:api` 可分別啟動。整合啟動的 API 不監看檔案，修改 Backend 或 `.env` 後請重新啟動；`dev:api` 則保留開發監看。
 
-**Developer B Backend Demo Phase 1**：`AI_MODE=demo npm run dev:navi` 可在沒有 Gemini Key 時啟動明確示範 provider；`AI_MODE=demo npm run dev:all` 同時啟動兩站。預設 `live` 保留原入口行為。新 Journey API 已提供，但工作區尚未接入 server-owned Journey，UI 繼續使用原 Mock 文件流程。契約、threshold、API 與限制見 [Backend Demo Phase 1](docs/backend-demo-phase-1.md)。
+**Developer B Phase 2 已完成 Backend AI 整合**：`AI_MODE=live` 使用真實 Gemini Intent、PDF / PNG / JPEG / WebP 文件抽取、JSON grounded knowledge 與 server-owned Journey；`AI_MODE=demo npm run dev:navi` 可在沒有 Key 時跑原固定示範（或 `AI_MODE=demo npm run dev:all` 同時啟兩站）。Live 失敗不會偷偷轉 Demo。
 
-Backend 設定集中於 `apps/api/src/config/env.js`，範例在 `apps/api/.env.example`；Gemini 模型與 threshold 沿用現有設定。未設定 key 時 health 正常、分析 API 明確回覆未配置，不會冒充 AI 成功。
+**目前工作區仍使用原 Mock 文件與瀏覽器 workflow**；入口 Intent 已接 Live API。真實文件與 server-owned Journey 已可從 HTTP / CLI 驗證，Developer A 的工作區 adapter 尚未串接。本階段沒有重做 UI。[完整 Backend Phase 2 文件](docs/backend-ai-phase-2.md)包含契約、設定、實測與限制。
+
+Backend 設定集中於 `apps/api/src/config/env.js`，範例在 `apps/api/.env.example`；預設 `gemini-3.5-flash-lite` / minimal thinking，整體 AI deadline 10 秒。`.env` 只在本機，不能 commit。未設定 Key 時分析 API 明確回覆未配置，health 僅表示設定存在，不代表供應商連線成功。
 
 前端設定在 `apps/web/.env.example`；`/api` 由 Vite proxy 連到 3001，production 需部署同 origin reverse proxy 或設定 `VITE_API_BASE_URL`。Key 不可放進 `VITE_*`。
 
@@ -107,18 +109,19 @@ npm run lint              # Mock Website 既有 ESLint
 npm run typecheck:mock    # Mock Website TypeScript
 npm run test:sites        # 先啟動 dev:all；雙站路由、資產、API proxy smoke checks
 npm run preview           # 只預覽 build，不會自動提供 API；需另啟 API / 設定部署 proxy
-npm run test:integration  # 真正 Gemini 測試，需要 apps/api/.env
+npm run test:integration  # 真實 Gemini：5 個中英文 / 其他需求 / Unknown 測試
+npm run test:ai           # 真實 Gemini：Intent + 測試 PDF + 35→70→90→100 + grounded knowledge
 ```
 
 一般測試使用注入的 Mock Provider，驗證中英班機延誤、車禍、信用卡扣款變更、Unknown、驗證／錯誤／超時／CORS／rate limit 與原有 Golden Path。**Mock Provider 測試不代表模型實際理解能力已驗證。** 真實測試會呼叫 Gemini，輸出測試類型、結果與耗時，不輸出 key 或完整使用者內容。
 
-截至本次 QA，沒有配置 API Key，因此真實 Gemini QA **尚未執行**。完整結果見 [Phase 2A 報告](docs/phase-2a-report.md)。
+Developer B Phase 2 QA：Frontend 10/10、Backend 52/52；真實 Gemini 5 項 Intent 及完整 API Golden Path / grounded knowledge 已通過。測試文件為程式建立的 synthetic PDF，不是實際旅客資料；完整紀錄與已知限制見 [Backend AI Phase 2](docs/backend-ai-phase-2.md)。
 
 ## Golden Path
 
 輸入「我昨天從東京回台灣，班機延誤七個小時，不知道可以怎麼處理。」→ API 理解 → 班機延誤工作區 **35%** → Mock 登機證 **70%** → Mock 延誤證明 **90%**（14:20 → 21:43 = 7 小時 23 分）→ Review **100%** → 既有理賠服務導引預覽。
 
-100% 只代表資料完整，Workflow 仍停在 `READY_FOR_REVIEW`，不判斷保障、理賠資格、核准或送出申請。移除／替換文件會撤回分數與確認。文件不會讀取或上傳；真實自然語言描述會送到 Gemini。FAQ 與來源面板仍標明示範知識庫。
+100% 只代表資料完整，Workflow 仍停在 `READY_FOR_REVIEW`，不判斷保障、理賠資格、核准或送出申請。移除／替換文件會撤回分數與確認。目前 UI 文件不會讀取或上傳；真實自然語言描述會送到 Gemini。使用 Backend 文件 API 時，文件 bytes 會在本次 request 傳送至 Gemini，Repository 不儲存 bytes。FAQ 與來源面板仍標明示範知識庫。
 
 其他已辨識需求只顯示「目前 Prototype 尚未開放完整服務旅程」，不展示假的完整 Workflow。模糊需求顯示「我還需要一些資訊」；低信心已知需求進入專員確認。真人接續僅準備本機摘要，不會聯絡專員。
 
@@ -135,11 +138,16 @@ VITE_ENABLE_DEMO_FALLBACK=true
 ## API 與架構
 
 - `GET /api/health`：狀態與 AI provider 是否已配置，不暴露環境值或密鑰。
-- `POST /api/intelligence/understand`：`{ "message": "..." }`，最多 2,000 字；回傳 NAVI 的 validated data + deterministic routing meta。
+- `POST /api/intelligence/understand`：相容既有前端的 Intent envelope。
+- `POST /api/analyze-intent`、`POST /api/journeys`、`GET /api/journeys/:id`：辨識／建立／取得案件。
+- `POST /api/journeys/:id/documents`：Multipart 真實文件抽取；DELETE 同路徑加 document ID 可移除。
+- `POST /api/journeys/:id/review`：`{ "confirmed": true }`，Backend 決定是否可以確認。
+- `GET /api/knowledge?query=...`：保留舊 JSON retrieval；`POST /api/knowledge/answer` 接 grounded AI，body 為 `{ "question": "..." }`。
+- `GET /api/journeys/:id/handoff-summary`：deterministic 摘要；`?enhance=true` 可加選取已知事實的 AI 摘要。
 
 ```text
 apps/web/src/            Premium React UI、純 workflow、API client 與 tests
-apps/api/src/            Express app、config、intent schema / service、Gemini provider、error handler
+apps/api/src/            Express、providers / prompts / validation / workflow / repository / knowledge
 apps/api/test/           Mock Provider contract / transport tests、手動真實 integration
 shared/intelligence.js  共用 Zod schema、enums、mapping 與 threshold default
 scripts/dev.js          無額外依賴的 NAVI／雙站開發啟動
@@ -149,7 +157,7 @@ docs/                   架構、產品、展示與各階段 QA 記錄
 
 Premium Dark UI、繁中／英文輔助、CSS Motion System、Reduced Motion、桌面三欄、手機 Tabs、來源面板與 Demo Reset 全部保留。既有進度仍使用同分頁 `sessionStorage`，reload 保留 validated AI facts 與 mock documents；不儲存文件位元組。
 
-詳見 [真實架構](docs/architecture.md)、[展示腳本](docs/demo-script.md) 與 [Phase 2A 報告](docs/phase-2a-report.md)。**Phase 2B / 2C 未實作。**
+詳見 [真實架構](docs/architecture.md)、[展示腳本](docs/demo-script.md) 與 [Phase 2A 報告](docs/phase-2a-report.md)。歷史 Phase 2A 文件保留；目前能力以 [Developer B Phase 2](docs/backend-ai-phase-2.md) 為準。RAG / Vector DB / MongoDB / Auth / Multi-Agent 未實作。
 
 
 ## 整合與協作

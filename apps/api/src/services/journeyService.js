@@ -54,7 +54,7 @@ export function createJourneyService({ repository, provider, config }) {
     },
     handoffSummary(id) {
       const journey = get(id);
-      return { issue: journey.title, summary: journey.summary, collected: journey.requirements.filter(r => r.status === 'verified').map(r => r.name), missing: journey.requirements.filter(r => r.status !== 'verified').map(r => r.name), reason: journey.confidence < config.humanReviewThreshold ? '需求辨識信心不足，需要人工確認。' : journey.nextAction.type === 'CONTACT_SPECIALIST' ? '部分資訊或文件需要專員確認。' : '服務條件與最終結果仍須依實際條款及專員審核。', sources: journey.sources, provider: journey.provider };
+      return { issue: journey.title, summary: journey.summary, collected: journey.requirements.filter(r => r.status === 'verified').map(r => r.name), missing: journey.requirements.filter(r => r.status !== 'verified').map(r => r.name), reason: journey.confidence < config.humanReviewThreshold ? '需求辨識信心不足，需要人工確認。' : journey.nextAction.type === 'CONTACT_SPECIALIST' ? '部分資訊或文件需要專員確認。' : '服務條件與最終結果仍須依實際條款及專員審核。', consistencyIssues: journey.consistencyIssues ?? [], sources: journey.sources, provider: journey.provider };
     },
   };
 }

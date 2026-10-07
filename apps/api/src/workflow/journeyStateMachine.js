@@ -1,7 +1,8 @@
 import rules from '../../../../knowledge/claims.json' with { type: 'json' };
 import { JOURNEY_STATES as STATES } from '../../../../shared/journey.js';
 import { getJourneyDefinition } from '../services/knowledgeService.js';
-import { documentVerified } from '../services/documentService.js';
+import { documentVerified, travelInformationComplete } from '../services/documentValidationService.js';
+import { checkEvidenceConsistency } from '../services/evidenceConsistencyService.js';
 
 const weights = new Map(rules.readiness.map(rule => [rule.id, rule.weight]));
 export function calculateReadiness(journey) {
@@ -13,6 +14,7 @@ export function determineNextAction(journey, config) {
   if (journey.confidence < config.journeyConfidenceThreshold || journey.documents.some(doc => doc.status === 'needs_review')) return action('CONTACT_SPECIALIST', null, '轉由專員協助', '部分資料需要進一步確認，已整理好資訊供專員接續處理。');
   if (!journey.supported) return action('NONE', null, 'NAVI 已辨識你的需求', '目前 Prototype 尚未開放這項服務的完整旅程。');
   for (const type of ['boarding_pass', 'delay_certificate']) if (!journey.documents.some(doc => doc.documentType === type && doc.status === 'verified')) return action('UPLOAD_DOCUMENT', type, type === 'boarding_pass' ? '請上傳登機證' : '請上傳航空公司延誤證明', type === 'boarding_pass' ? '用於確認旅客與航班資訊。' : '這份文件可協助確認實際延誤時間。');
+  if (!journey.requirements.some(r => r.id === 'travel' && r.status === 'verified')) return action('PROVIDE_INFORMATION', 'travel', '請補齊旅行資訊', '請重新上傳包含旅客姓名、航班、航線與日期的完整登機證。');
   return journey.confirmed ? action('PROCEED_TO_SERVICE', null, '前往服務', '資料已準備完成，可接續既有服務；這不代表理賠核准或已送出申請。') : action('REVIEW_INFORMATION', null, '確認案件資料', '請確認航班資訊與已提供的文件。');
 }
 export function deriveJourney(journey, config) {
@@ -20,21 +22,25 @@ export function deriveJourney(journey, config) {
     const verified = documentVerified(document, config.journeyConfidenceThreshold);
     return { ...document, status: verified ? 'verified' : 'needs_review', matchedRequirements: verified ? [document.documentType] : [] };
   });
-  const boardingDocument = documents.find(doc => doc.documentType === 'boarding_pass');
   const delayDocument = documents.find(doc => doc.documentType === 'delay_certificate');
-  if (boardingDocument?.fields.flightNumber && delayDocument?.fields.flightNumber && boardingDocument.fields.flightNumber !== delayDocument.fields.flightNumber) {
-    delayDocument.status = 'needs_review'; delayDocument.matchedRequirements = [];
+  const consistencyIssues = checkEvidenceConsistency(documents, journey.extractedData);
+  for (const issue of consistencyIssues) {
+    // Cross-document conflict leaves the original boarding evidence usable, while the
+    // conflicting certificate needs review. A conflict with the incident flags that file.
+    const affected = issue.documentIds.length > 1 ? [delayDocument?.id] : issue.documentIds;
+    for (const doc of documents) if (affected.includes(doc.id)) { doc.status = 'needs_review'; doc.matchedRequirements = []; }
   }
-  journey = { ...journey, documents };
+  journey = { ...journey, documents, consistencyIssues };
   const definition = getJourneyDefinition(journey.serviceType);
   const verified = type => journey.documents.some(doc => doc.documentType === type && doc.status === 'verified');
   const boarding = verified('boarding_pass');
   const delay = verified('delay_certificate');
-  const checks = { incident: journey.conversation.some(entry => entry.role === 'user' && entry.message.trim()), service: journey.serviceType !== 'unknown', travel: boarding, boarding_pass: boarding, delay_certificate: delay, confirmation: boarding && delay && journey.confirmed };
+  const travel = boarding && travelInformationComplete(documents.find(doc => doc.documentType === 'boarding_pass'));
+  const checks = { incident: journey.conversation.some(entry => entry.role === 'user' && entry.message.trim()), service: journey.serviceType !== 'unknown', travel, boarding_pass: boarding, delay_certificate: delay, confirmation: travel && boarding && delay && journey.confirmed };
   const needsReview = journey.documents.some(doc => doc.status === 'needs_review');
   const requirements = (definition?.requirements ?? []).map(requirement => ({ ...requirement, weight: weights.get(requirement.id), status: checks[requirement.id] ? 'verified' : journey.documents.some(doc => doc.documentType === requirement.id && doc.status === 'needs_review') ? 'needs_review' : 'missing' }));
   const low = journey.confidence < config.journeyConfidenceThreshold;
-  const currentStage = journey.serviceType === 'unknown' ? STATES.INCIDENT_IDENTIFIED : needsReview || journey.confidence < config.humanReviewThreshold ? STATES.HUMAN_REVIEW : low || !definition ? STATES.SERVICE_IDENTIFIED : boarding && delay ? journey.confirmed ? STATES.READY_TO_PROCEED : STATES.READY_FOR_REVIEW : STATES.EVIDENCE_COLLECTION;
+  const currentStage = journey.serviceType === 'unknown' ? STATES.INCIDENT_IDENTIFIED : needsReview || journey.confidence < config.humanReviewThreshold ? STATES.HUMAN_REVIEW : low || !definition ? STATES.SERVICE_IDENTIFIED : travel && boarding && delay ? journey.confirmed ? STATES.READY_TO_PROCEED : STATES.READY_FOR_REVIEW : STATES.EVIDENCE_COLLECTION;
   const derived = { ...journey, supported: Boolean(definition), requirements, currentStage };
   return { ...derived, readiness: calculateReadiness(derived), nextAction: determineNextAction(derived, config) };
 }

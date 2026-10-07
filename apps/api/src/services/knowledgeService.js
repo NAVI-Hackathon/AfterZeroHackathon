@@ -13,3 +13,11 @@ export function retrieveKnowledge(query) {
   const entry = faq.find(item => item.id === query || item.title === query || item.id === topic);
   return entry ? { answer: entry.answer, sources: getSources(entry.sourceIds), isMock: true, found: true } : { answer: '示範知識庫目前沒有這項資訊，請補充問題或由專員協助確認。', sources: [], isMock: true, found: false };
 }
+
+export function retrieveAnswerContext(query) {
+  // Only this curated flight-delay collection is available. Unrelated services have no context.
+  if (/車禍|事故|信用卡|扣款|繳費|付款|帳戶|accident|payment|credit card|account/i.test(query)) return null;
+  const retrieved = retrieveKnowledge(query);
+  if (!retrieved.found) return null;
+  return { answer: retrieved.answer, sourceIds: retrieved.sources.map(source => source.id), sources: retrieved.sources.map(source => ({ ...source, content: sitemap.find(record => record.id === source.id).content })) };
+}
