@@ -498,3 +498,7 @@ button:active:not(:disabled) { transform: scale(0.98); }
 [data-embedded="true"] .how-it-works, [data-embedded="true"] .workspace-footer { display: none; }
 [data-embedded="true"] .workspace { padding: 18px 16px 24px; }
 [data-embedded="true"] .mobile-tabs { top: 64px; }
+.navigate-link { justify-content: flex-start; gap: 6px; color: var(--color-accent); font-size: 11px; }
+.navigate-link:hover:not(:disabled) { color: var(--color-text); }
+.next-action-buttons .navigate-link { justify-content: center; }
+.proceed .button-secondary { margin-bottom: 8px; }

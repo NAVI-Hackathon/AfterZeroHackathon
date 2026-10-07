@@ -11,7 +11,7 @@ const buttonCopy = {
   NONE: null,
 };
 
-export default function NextActionCard({ action, complete, busy, onAction, onSample }) {
+export default function NextActionCard({ action, complete, busy, onAction, onSample, onNavigate }) {
   const copy = buttonCopy[action.type];
   const processing = Boolean(busy);
   return (
@@ -29,6 +29,11 @@ export default function NextActionCard({ action, complete, busy, onAction, onSam
             {copy && (
               <button type="button" className="button button-primary" disabled={processing} onClick={() => onAction(action)}>
                 {processing ? '正在辨識文件…' : copy.label}<Icon name={copy.icon} size={16} />
+              </button>
+            )}
+            {action.destination && onNavigate && (
+              <button type="button" className="link-button navigate-link" onClick={() => onNavigate(action.destination)}>
+                <Icon name="external" size={14} />帶我去：{action.destination.label}
               </button>
             )}
             {action.type === 'UPLOAD_DOCUMENT' && (

@@ -7,13 +7,15 @@ import Toast from './components/Toast.jsx';
 import { HandoffDialog, ProceedDialog, ReviewDialog, ServiceDialog } from './components/dialogs/JourneyDialogs.jsx';
 import { createApiAdapter, createMockAdapter, isEmbedPath, resolveMode } from './services/adapters.js';
 import { useHostBridge } from './hooks/useHostBridge.js';
-import { naviMessage } from '../../../shared/embed.js';
+import { naviMessage, originOf } from '../../../shared/embed.js';
 import { analysisErrors } from './services/intelligence.js';
 import { serviceLabel } from './domain/intelligence.js';
 import { documentSpecs } from './mocks/hospitalClaim.js';
 
 const embedded = isEmbedPath(location.pathname);
 const mode = resolveMode(location);
+// Mock insurer site for standalone mode (NextAction links open there in a new tab).
+const mockSiteOrigin = originOf(import.meta.env.VITE_MOCK_SITE_URL ?? '');
 
 const errorCopy = {
   ...analysisErrors,
@@ -44,7 +46,8 @@ function wait(ms, signal) {
 export default function App() {
   const service = useMemo(() => (mode === 'demo' ? createMockAdapter() : createApiAdapter()), []);
   const [snapshot, setSnapshot] = useState(() => service.restore());
-  const [view, setView] = useState(() => (location.hash === '#workspace' && snapshot ? 'workspace' : 'landing'));
+  // Embedded NAVI reopens on the journey in progress (the host page may have reloaded the iframe).
+  const [view, setView] = useState(() => ((location.hash === '#workspace' || embedded) && snapshot ? 'workspace' : 'landing'));
   const [analysisPhase, setAnalysisPhase] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [docStates, setDocStates] = useState({});
@@ -143,8 +146,20 @@ export default function App() {
     }
   }
 
+  /** Take the user to the step's page on the insurer site (embedded: host navigates; standalone: new tab). */
+  const navigate = host.connected
+    ? destination => host.send(naviMessage('navi:navigate', { destination }))
+    : !embedded && mockSiteOrigin
+      ? destination => {
+        const url = new URL(destination.path, mockSiteOrigin);
+        if (destination.anchor) url.searchParams.set('focus', destination.anchor);
+        window.open(url, '_blank', 'noopener');
+      }
+      : null;
+
   const actions = {
     upload,
+    navigate,
     remove(type) {
       setSnapshot(service.removeDocument(type));
       setDocStates(s => ({ ...s, [type]: { status: 'idle' } }));
@@ -250,7 +265,7 @@ export default function App() {
               onProceed={() => setDialog('proceed')} />
           )}
           {snapshot && dialog === 'proceed' && (
-            <ProceedDialog key="proceed" snapshot={snapshot} onClose={closeDialog}
+            <ProceedDialog key="proceed" snapshot={snapshot} onClose={closeDialog} onNavigate={navigate}
               onDone={() => { setDialog(null); notify('服務導引已完成，案件資料保留在這個分頁。'); }} />
           )}
           {snapshot && dialog === 'handoff' && (

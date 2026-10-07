@@ -11,6 +11,7 @@ export const SITE_ROUTES = {
   claims: "/services/claims",
   online: "/services/online",
   glossary: "/glossary",
+  faq: "/faq",
 } as const;
 
 const OFFICIAL_TO_SITE: Record<string, string> = {

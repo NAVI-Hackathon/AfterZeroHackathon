@@ -39,6 +39,9 @@ export const partnerHospitals = hospitalUpload.partner_hospitals ?? [];
 /** 住院醫療應備文件, e.g. 保險金申請書、診斷書或住院證明、病理組織檢查報告（依病況）… */
 export const inpatientDocuments = seed.claim_document_requirements['住院醫療'];
 export const passbookRule = pick(seed.claim_general_rules, '存摺影本');
+// Row anchors on the mock site's claims page: 1-based position in the data file (both apps share it).
+export const inpatientDocumentsAnchor = `claim-doc-${Object.keys(seed.claim_document_requirements).indexOf('住院醫療') + 1}`;
+export const passbookRuleAnchor = `claim-rule-${seed.claim_general_rules.indexOf(passbookRule) + 1}`;
 export const diagnosisRule = pick(seed.claim_general_rules, '診斷證明書');
 
 /** Reminders users tend to miss, quoted from the service notes. */
@@ -61,4 +64,9 @@ export const pageTitles = {
 
 export function officialSource(url) {
   return { url, title: pageTitles[url] ?? '法國巴黎人壽官網', retrievedAt };
+}
+
+/** FAQ entries are anchored by their 1-based position in the data file (same rule as the mock site). */
+export function faqDestination(faq) {
+  return { kind: 'faq', path: '/faq', anchor: `faq-${seed.faq.indexOf(faq) + 1}`, label: '查看常見問題', source: officialSource(faq.source) };
 }

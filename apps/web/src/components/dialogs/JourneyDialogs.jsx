@@ -61,7 +61,7 @@ export function ReviewDialog({ snapshot, onConfirm, onProceed, onClose }) {
   );
 }
 
-export function ProceedDialog({ snapshot, onClose, onDone }) {
+export function ProceedDialog({ snapshot, onClose, onDone, onNavigate }) {
   const { journey } = snapshot;
   const channel = journey.claimContext?.channels.find(c => c.id === journey.nextAction.target);
   return (
@@ -78,6 +78,11 @@ export function ProceedDialog({ snapshot, onClose, onDone }) {
         </ul>
         {channel && <ul className="proceed-notes">{channel.notes.map(note => <li key={note}>{note}</li>)}</ul>}
         <p className="modal-footnote"><Icon name="info" size={14} />本原型僅展示服務導引，不會連線正式平台或送出申請。</p>
+        {channel && onNavigate && (
+          <button type="button" className="button button-secondary full-width" onClick={() => { onNavigate(channel.destination); onDone(); }}>
+            <Icon name="external" size={16} />{channel.destination.label}
+          </button>
+        )}
         <button type="button" className="button button-primary full-width" onClick={onDone}>完成導引<Icon name="check" size={16} /></button>
       </div>
     </Modal>

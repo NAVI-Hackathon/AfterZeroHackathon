@@ -5,7 +5,7 @@ import { recognizeHospital } from '../domain/hospitals.js';
 import { basicJourneys } from '../mocks/basicJourneys.js';
 import { documentFixtures, DOCUMENT_TYPES } from '../mocks/hospitalClaim.js';
 import {
-  claimApplicationForm, claimByMail, diagnosisRule, hospitalUpload, inpatientDocuments, officialSource,
+  claimApplicationForm, claimByMail, diagnosisRule, hospitalUpload, inpatientDocuments, inpatientDocumentsAnchor, officialSource, passbookRuleAnchor,
   partnerHospitals, passbookRule, reminders, unionChain,
 } from '../content/cardifData.js';
 
@@ -24,8 +24,8 @@ const applicationForm = inpatientDocuments.find(name => name.includes('申請書
 const certificateName = inpatientDocuments.find(name => name.includes('診斷書'));
 
 const destinations = {
-  documents: { kind: 'page', path: '/services/claims', anchor: 'claim-documents-table', label: '查看住院醫療應備文件', source: claimsSource },
-  rules: { kind: 'page', path: '/services/claims', anchor: 'claim-general-rules', label: '查看理賠申請注意事項', source: claimsSource },
+  documents: { kind: 'page', path: '/services/claims', anchor: inpatientDocumentsAnchor, label: '查看住院醫療應備文件', source: claimsSource },
+  rules: { kind: 'page', path: '/services/claims', anchor: passbookRuleAnchor, label: '查看匯款給付規定', source: claimsSource },
   form: { kind: 'form', path: '/services/forms', anchor: 'form-claim-1-1-1', label: `下載${claimApplicationForm?.name ?? '保險金申請書'}`, source: claimsSource },
   hospitalUpload: { kind: 'entry_point', path: '/services/claims', anchor: 'service-claim-hospital-upload', label: '前往保險理賠醫起通', source: officialSource(hospitalUpload.url) },
   unionChain: { kind: 'entry_point', path: '/services/claims', anchor: 'service-claim-union-chain', label: '前往理賠聯盟鏈', source: officialSource(unionChain.url) },

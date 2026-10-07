@@ -33,7 +33,7 @@ function basicStepText(i, journey, basic) {
   return ['已整理你的需求。', `已辨識為「${basic.title}」。`, '先備妥右側列出的資料。', '', ''][i] ?? '';
 }
 
-function ChannelList({ journey, onProceed }) {
+function ChannelList({ journey, onProceed, onNavigate }) {
   const { channels, reminders } = journey.claimContext;
   return (
     <motion.div className="channels" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: transition.enter }}>
@@ -46,6 +46,11 @@ function ChannelList({ journey, onProceed }) {
               {!channel.available && <span className="tag">非合作醫院</span>}
             </div>
             <p>{channel.notes[0]}</p>
+            {onNavigate && (
+              <button type="button" className="link-button navigate-link" onClick={() => onNavigate(channel.destination)}>
+                <Icon name="external" size={13} />{channel.destination.label}
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -60,7 +65,7 @@ function ChannelList({ journey, onProceed }) {
   );
 }
 
-export default function JourneyTimeline({ snapshot, documentsSlot, onReview, onProceed, onViewService }) {
+export default function JourneyTimeline({ snapshot, documentsSlot, onReview, onProceed, onViewService, onNavigate }) {
   const { journey, context } = snapshot;
   const isHospital = context.kind === 'hospital' && journey.currentStage !== 'HUMAN_REVIEW';
   const basic = basicJourneys[journey.currentStage === 'HUMAN_REVIEW' && context.kind !== 'hospital' ? 'unknown' : context.kind] ?? basicJourneys.unknown;
@@ -126,7 +131,7 @@ export default function JourneyTimeline({ snapshot, documentsSlot, onReview, onP
                   </button>
                 )}
 
-                {isHospital && i === 4 && journey.currentStage === 'READY_TO_PROCEED' && <ChannelList journey={journey} onProceed={onProceed} />}
+                {isHospital && i === 4 && journey.currentStage === 'READY_TO_PROCEED' && <ChannelList journey={journey} onProceed={onProceed} onNavigate={onNavigate} />}
 
                 {!isHospital && current && journey.currentStage !== 'HUMAN_REVIEW' && basic.steps.length > 0 && (
                   <div className="basic-steps">

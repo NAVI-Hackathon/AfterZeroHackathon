@@ -93,7 +93,7 @@ function RequirementList({ requirements }) {
   );
 }
 
-export default function ReadinessPanel({ snapshot, busy, onAction, onSample, onHandoff, showNextAction = true }) {
+export default function ReadinessPanel({ snapshot, busy, onAction, onSample, onHandoff, onNavigate, showNextAction = true }) {
   const { journey } = snapshot;
   const isHospital = snapshot.context.kind === 'hospital' && journey.currentStage !== 'HUMAN_REVIEW';
   const delta = useReadinessDelta(journey.readiness);
@@ -133,7 +133,7 @@ export default function ReadinessPanel({ snapshot, busy, onAction, onSample, onH
 
       {journey.requirements.length > 0 && <RequirementList requirements={journey.requirements} />}
 
-      {showNextAction && <NextActionCard action={journey.nextAction} complete={complete} busy={busy} onAction={onAction} onSample={onSample} />}
+      {showNextAction && <NextActionCard action={journey.nextAction} complete={complete} busy={busy} onAction={onAction} onSample={onSample} onNavigate={onNavigate} />}
 
       <p className="readiness-note"><Icon name="shield" size={14} />準備完成度代表資料完整度，不代表理賠核准或保障判斷。</p>
       {journey.nextAction.type !== 'CONTACT_SPECIALIST' && (

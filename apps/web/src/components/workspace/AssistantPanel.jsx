@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import Icon from '../Icon.jsx';
 import { assistantQuestions } from '../../mocks/hospitalClaim.js';
-import { claimByMail, claimFaq, hospitalUpload, officialSource, reminders, unionChain } from '../../content/cardifData.js';
+import { claimByMail, claimFaq, faqDestination, hospitalUpload, officialSource, reminders, unionChain } from '../../content/cardifData.js';
+import { claimDestinations } from '../../services/journeyEngine.js';
 import { crossfade, fadeUp, staggerChildren, transition } from '../../motion/tokens.js';
 
 function suggestionFor(snapshot) {
@@ -21,14 +22,14 @@ function answerFor(question) {
   const entry = assistantQuestions.find(item => item.match.test(question));
   if (entry?.id === 'duration') {
     const faq = claimFaq.find(f => /多久/.test(f.q));
-    if (faq) return { text: faq.a, source: officialSource(faq.source) };
+    if (faq) return { text: faq.a, source: officialSource(faq.source), destination: faqDestination(faq) };
   }
-  if (entry?.id === 'hospital') return { text: `${hospitalUpload.name}：${hospitalUpload.notes.join('；')}。`, source: officialSource(hospitalUpload.url) };
-  if (entry?.id === 'originals') return { text: `${unionChain.name}：${reminders.unionReturnOriginals}；${reminders.unionLargeAmount}。`, source: officialSource(unionChain.url) };
+  if (entry?.id === 'hospital') return { text: `${hospitalUpload.name}：${hospitalUpload.notes.join('；')}。`, source: officialSource(hospitalUpload.url), destination: claimDestinations.hospitalUpload };
+  if (entry?.id === 'originals') return { text: `${unionChain.name}：${reminders.unionReturnOriginals}；${reminders.unionLargeAmount}。`, source: officialSource(unionChain.url), destination: claimDestinations.unionChain };
   return { text: '這個問題目前沒有可引用的官網資料，建議轉由專員確認。', source: null };
 }
 
-export default function AssistantPanel({ snapshot, onHandoff }) {
+export default function AssistantPanel({ snapshot, onHandoff, onNavigate }) {
   const { journey, context } = snapshot;
   const isHospital = context.kind === 'hospital';
   const hospital = journey.claimContext?.hospital;
@@ -116,6 +117,9 @@ export default function AssistantPanel({ snapshot, onHandoff }) {
                 <motion.div key={i} className="qa" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: transition.enter }}>
                   <p className="qa-q">{a.q}</p>
                   <p className="qa-a">{a.text}</p>
+                  {a.destination && onNavigate && (
+                    <button type="button" className="link-button navigate-link" onClick={() => onNavigate(a.destination)}><Icon name="external" size={13} />在官網查看：{a.destination.label}</button>
+                  )}
                   {a.source && <p className="qa-source"><Icon name="book" size={12} />依據：法國巴黎人壽官網・{a.source.title}（擷取 {a.source.retrievedAt}）</p>}
                 </motion.div>
               ))}

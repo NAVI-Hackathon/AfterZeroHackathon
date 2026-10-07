@@ -53,12 +53,12 @@ export default function Workspace({ snapshot, docStates, busy, tab, onTab, assis
   const documents = hasDocuments ? <DocumentList snapshot={snapshot} docStates={docStates} busy={busy} actions={actions} registerInput={registerInput} /> : null;
   const timeline = (withDocuments) => (
     <JourneyTimeline snapshot={snapshot} documentsSlot={withDocuments ? documents : null}
-      onReview={actions.review} onProceed={actions.proceed} onViewService={() => actions.next(journey.nextAction)} />
+      onReview={actions.review} onProceed={actions.proceed} onViewService={() => actions.next(journey.nextAction)} onNavigate={actions.navigate} />
   );
   const readiness = (props = {}) => (
-    <ReadinessPanel snapshot={snapshot} busy={busy} onAction={actions.next} onSample={type => actions.upload(type, { sample: true })} onHandoff={actions.handoff} {...props} />
+    <ReadinessPanel snapshot={snapshot} busy={busy} onAction={actions.next} onSample={type => actions.upload(type, { sample: true })} onHandoff={actions.handoff} onNavigate={actions.navigate} {...props} />
   );
-  const assistant = <AssistantPanel snapshot={snapshot} onHandoff={actions.handoff} />;
+  const assistant = <AssistantPanel snapshot={snapshot} onHandoff={actions.handoff} onNavigate={actions.navigate} />;
 
   return (
     <motion.main
@@ -123,7 +123,7 @@ export default function Workspace({ snapshot, docStates, busy, tab, onTab, assis
                   {hasDocuments && (
                     <section className="panel mobile-readiness" aria-label="準備完成度">
                       <ReadinessRing value={journey.readiness} size={96} compact />
-                      <NextActionCard action={journey.nextAction} complete={journey.currentStage === 'READY_TO_PROCEED'} busy={busy} onAction={actions.next} onSample={type => actions.upload(type, { sample: true })} />
+                      <NextActionCard action={journey.nextAction} complete={journey.currentStage === 'READY_TO_PROCEED'} busy={busy} onAction={actions.next} onSample={type => actions.upload(type, { sample: true })} onNavigate={actions.navigate} />
                     </section>
                   )}
                   {!hasDocuments && readiness()}
