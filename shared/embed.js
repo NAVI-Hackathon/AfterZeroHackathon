@@ -39,7 +39,7 @@ export function isAllowedOrigin(origin, allowed) {
 /** Validate an incoming MessageEvent. Returns the parsed message or null. */
 export function readMessage(event, { allowedOrigins, expectedSource, schema }) {
   if (!isAllowedOrigin(event.origin, allowedOrigins)) return null;
-  if (expectedSource && event.source !== expectedSource) return null;
+  if (!expectedSource || event.source !== expectedSource) return null;
   const result = schema.safeParse(event.data);
   return result.success ? result.data : null;
 }

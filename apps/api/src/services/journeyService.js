@@ -8,7 +8,7 @@ import { deriveJourney } from '../workflow/journeyStateMachine.js';
 import { analyzeDocument } from './documentService.js';
 import { ApiError } from '../middleware/errorHandler.js';
 
-const titles = { vehicle_accident: '車輛事故', payment_method_change: '更改繳費方式', policy_change: '保單變更', policy_information: '保單資訊', unknown: '需要補充說明' };
+const titles = { hospitalization_claim: '住院醫療理賠', vehicle_accident: '車輛事故', payment_method_change: '更改繳費方式', policy_change: '保單變更', policy_information: '保單資訊', unknown: '需要補充說明' };
 // Do not persist common identifiers even in transient demo conversations. No request body logging.
 const redact = text => text.replace(/\b[A-Z][12]\d{8}\b/gi, '[已遮蔽身分證字號]').replace(/\b09\d{2}[- ]?\d{3}[- ]?\d{3}\b/g, '[已遮蔽電話]').replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[已遮蔽電子郵件]');
 

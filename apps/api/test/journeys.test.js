@@ -94,6 +94,46 @@ test('confidence thresholds, unknown and unsupported services cannot enter a fak
   assert.equal((await api.upload(preview.id, 'boarding_pass')).status, 409);
 });
 
+test('hospitalization creates an unsupported preview instead of a server error', async t => {
+  const api = await server(t);
+  const response = await api.post('/journeys', { message: '我上週在台中榮總住院五天，要怎麼申請理賠？' });
+  assert.equal(response.status, 201);
+  const journey = ServiceJourneySchema.parse(await response.json());
+  assert.equal(journey.serviceType, 'hospitalization_claim');
+  assert.equal(journey.title, '住院醫療理賠');
+  assert.equal(journey.supported, false);
+  assert.equal(journey.readiness, 0);
+  assert.equal(journey.currentStage, 'SERVICE_IDENTIFIED');
+  assert.equal(journey.nextAction.type, 'NONE');
+  assert.deepEqual(journey.requirements, []);
+  assert.deepEqual(journey.documents, []);
+  assert.deepEqual(await (await api.request(`/journeys/${journey.id}`)).json(), journey);
+  for (const rejected of [await api.upload(journey.id, 'boarding_pass'), await api.post(`/journeys/${journey.id}/review`, { confirmed: true })]) {
+    assert.equal(rejected.status, 409);
+    assert.equal((await rejected.json()).error.code, 'SERVICE_NOT_SUPPORTED');
+  }
+});
+
+test('medical questions cannot retrieve flight requirements or invoke AI without matching knowledge', async t => {
+  let calls = 0;
+  const api = await server(t, { ...createDemoProvider(), answerKnowledge: async () => { calls++; throw new Error('Unrelated knowledge must not call AI.'); } });
+  for (const question of ['住院理賠需要哪些文件？', 'What documents do I need for a medical claim?', '出院後手術診斷書要怎麼準備？', '信用卡扣款需要哪些文件？']) {
+    const retrieval = await api.request(`/knowledge?query=${encodeURIComponent(question)}`);
+    assert.equal(retrieval.status, 200);
+    const knowledge = await retrieval.json();
+    assert.equal(knowledge.found, false);
+    assert.deepEqual(knowledge.sources, []);
+    const response = await api.post('/knowledge/answer', { question });
+    assert.equal(response.status, 200);
+    const answer = await response.json();
+    assert.equal(answer.answer, '目前提供的資料不足以確認。');
+    assert.equal(answer.supported, false);
+    assert.equal(answer.answerMode, 'insufficient_information');
+    assert.deepEqual(answer.sources, []);
+  }
+  assert.equal(calls, 0);
+});
+
 test('unknown documents and malformed provider output fail safely and leave state unchanged', async t => {
   const api = await server(t); const journey = await api.create();
   for (const type of [undefined, 'receipt']) {

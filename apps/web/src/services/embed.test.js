@@ -46,3 +46,14 @@ test('navigate messages carry only internal mock-site paths and kebab-case ancho
   for (const anchor of ['Form Claim', '"]<script>', 'a--b', '-a']) assert.equal(read({ ...valid, anchor }), null, anchor);
   assert.equal(read({ ...valid, source: { ...valid.source, url: 'https://evil.example/zh/a314' } }), null);
 });
+
+test('messages are rejected before the expected window exists, even from an allowed origin', () => {
+  for (const [schema, data] of [[HostMessageSchema, hostMessage('host:hello')], [NaviMessageSchema, naviMessage('navi:ready')], [NaviMessageSchema, naviMessage('navi:navigate', { destination: claimDestinations.form })]]) {
+    for (const expectedSource of [null, undefined]) {
+      for (const source of [parent, stranger, null]) {
+        assert.equal(readMessage(event('http://127.0.0.1:3000', data, source), { allowedOrigins, expectedSource, schema }), null);
+      }
+    }
+    assert.deepEqual(readMessage(event('http://127.0.0.1:3000', data), { allowedOrigins, expectedSource: parent, schema }), data);
+  }
+});

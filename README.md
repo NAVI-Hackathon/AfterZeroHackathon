@@ -11,10 +11,11 @@ apps/
   web/                 NAVI：React / Vite，Premium UI、工作區、Golden Path
   api/                 NAVI：Express / Gemini、server-owned Journey 與文件辨識 API
   mock-site/           Mock Website：Next.js / TypeScript / Tailwind
-    app/(site)/        模擬官網 8 頁與服務分頁
+    app/(site)/        模擬官網、常見問題與服務分頁
     components/site/   模擬站導覽、Tabs、data-tour-id、示意下載
+    components/navi/   浮動 NAVI iframe、跨頁導覽與目標高亮
     public/            原有靜態資產
-shared/               NAVI Intent / Journey / 文件共用 Zod 契約
+shared/               NAVI Intent / Journey / 文件 / 嵌入訊息共用 Zod 契約
 lib/contracts/         原模擬服務助手契約（保留，未改成 NAVI 契約）
 lib/db/、lib/env.ts     原團隊的資料庫／環境規格骨架，尚未接入現有服務
 data/                  模擬官網本地 seed、爬蟲輸出
@@ -42,7 +43,7 @@ npm run dev:navi
 
 **Developer B Phase 2 已完成 Backend AI 整合；Phase 3 已加入零成本防護與本地評估**。`dev`／`dev:navi`／`dev:all`／`dev:api` 一律以 Demo 啟動，不受舊 `.env` 的 `AI_MODE=live` 影響，也不送出 Gemini 請求。Free Tier 設定確認後，需人工執行 `npm run dev:live` 才啟用真實 Intent、文件抽取、JSON grounded knowledge 與 server-owned Journey。Live 失敗不會偷偷轉 Demo。
 
-**目前工作區仍使用原 Mock 文件與瀏覽器 workflow**；入口 Intent 使用 Backend API，依明確啟動模式區分 Demo／Live。真實文件與 server-owned Journey 已可從 HTTP / CLI 驗證，Developer A 的工作區 adapter 尚未串接。本階段沒有重做 UI。[完整 Backend Phase 2 文件](docs/backend-ai-phase-2.md)包含契約、設定、實測與限制。
+**目前住院工作區使用 Mock 文件與瀏覽器 workflow**；一般模式的入口 Intent 使用 Backend API，依明確啟動模式區分 Demo／Live；`/demo` 則完全使用本地 Mock Adapter。Backend 完整文件與 server-owned Journey API 目前只支援班機延誤，尚未接入住院工作區。[完整 Backend Phase 2 文件](docs/backend-ai-phase-2.md)包含契約、設定、實測與限制。
 
 Backend 設定集中於 `apps/api/src/config/env.js`，範例在 `apps/api/.env.example`；預設 `gemini-3.5-flash-lite` / minimal thinking，整體 AI deadline 10 秒。`.env` 只在本機，不能 commit。Live 未設定 Key 或未確認 Free Tier 時不允許外部請求；Demo 不需要 Key。health 的配置欄位僅表示 Key 存在，不代表供應商連線成功或 Billing 狀態。
 
@@ -84,15 +85,36 @@ npm run dev:all
 
 `Ctrl+C` 一併停止三個程序；任一程序啟動失敗會停止其他程序。連接埠被占用時會報錯，不會自動換到另一個 port。不要同時再跑 `dev:navi`／`dev:mock`。
 
+### 啟用嵌入式 NAVI 與官網導覽
+
+嵌入功能已實作，預設未設定網址，因此模擬網站不會顯示浮動按鈕。若要展示，請將以下設定加入各自的本機檔案（保留已有設定，不要覆蓋，也不要 commit）：
+
+`apps/web/.env.local`：
+
+```dotenv
+VITE_EMBED_ALLOWED_ORIGINS=http://127.0.0.1:3000
+VITE_MOCK_SITE_URL=http://127.0.0.1:3000
+```
+
+`apps/mock-site/.env.local`：
+
+```dotenv
+NEXT_PUBLIC_NAVI_EMBED_URL=http://127.0.0.1:5173/embed?mode=demo
+```
+
+重新啟動 `npm run dev:all` 後，在 **http://127.0.0.1:3000/** 點右下角 NAVI，便會開啟獨立 NAVI 網站的 iframe。上述 `mode=demo` 使用本地 Mock Adapter，不呼叫 Backend 或 Gemini。「帶我去」會讓模擬網站切換頁面／分頁、捲動並高亮目標；手機版導覽後會收合助手。獨立 NAVI 的相同動作則開啟模擬網站新分頁。
+
+兩站仍各自執行，沒有把模擬官網 routing 搬進 NAVI，也沒有自動讀取官網內容或跨站傳遞案件資料。訊息同時驗證精確 origin、預期 window 與 Zod Schema；請統一使用 `127.0.0.1`，不要與 `localhost` 混用。未啟用嵌入時，可直接在 **http://127.0.0.1:5173/demo** 展示完整本地流程。
+
 ## Demo Flow
 
 1. 開 **3000** 模擬網站 →「理賠程序介紹」(`/services/claims`) → 切換「應備文件」，展示使用者原本需要自行搜尋／閱讀的情境。
-2. **手動切換另一分頁至 5173 NAVI**。目前沒有跨站自動傳遞案件、嵌入式助手或自動導覽 overlay，請勿把它說成已完成。
+2. 啟用上述嵌入設定後，點右下角 **NAVI** 開啟助手；未設定時，手動切換至 **http://127.0.0.1:5173/demo**。一般模式 **http://127.0.0.1:5173/** 的入口會呼叫 Backend Intent API，與本地示範模式不同。
 3. NAVI 輸入「我上週在台中榮總住院五天，要怎麼申請理賠？」→ 開始分析 → 住院醫療理賠旅程 **35%**（辨識臺中榮民總醫院為醫起通合作醫院）。
-4. 上傳診斷書或住院證明（Mock 辨識）→ **70%**；上傳存摺影本（Mock）→ **90%**；確認資料並填妥保險金申請書 → **100%**；前往服務僅開啟導引預覽，不送件。
+4. 上傳診斷書或住院證明（Mock 辨識）→ **70%**；上傳存摺影本（Mock）→ **90%**；確認資料並確認已填妥保險金申請書 → **100%**。各步驟可點「帶我去」查看應備文件、匯款規定與表單位置；前往服務先開啟導引預覽，再可導航至模擬服務入口，不送件。
 5. NAVI 右上選單「重新開始示範」可清除本分頁進度。reload 保留 sessionStorage；不同 tab 的案件分開。
 
-住院理賠的應備文件、醫起通合作醫院、理賠聯盟鏈與郵寄規則全部取自 `data/cardif_seed_data.json`（官網公開資料整理）；診斷書與存摺內容為示範資料。預設由 Backend Demo Provider 回應，API metadata 標記 `demo_fallback`；要使用真實 Gemini 請改用 `npm run dev:live`。若要演示 Backend 斷線時的前端備援，請先按下方方式**明確啟用示範備援**；備援畫面會標記本次未使用 AI。
+住院理賠的應備文件、醫起通合作醫院、理賠聯盟鏈與郵寄規則全部取自 `data/cardif_seed_data.json`（官網公開資料整理）；診斷書與存摺內容為示範資料。一般模式搭配預設開發指令時由 Backend Demo Provider 回應，API metadata 標記 `demo_fallback`；`/demo` 與 `/embed?mode=demo` 不依賴 API。要使用真實 Gemini 入口理解，需先確認下方零成本條件，再人工執行 `npm run dev:live`。若要演示 Backend 斷線時的前端備援，請先按下方方式**明確啟用示範備援**；備援畫面會標記本次未使用 AI。
 
 ## 測試與 Build
 
@@ -125,9 +147,11 @@ npm run test:ai           # 相容舊指令：現在執行 Local evaluation
 
 輸入「我上週在台中榮總住院五天，要怎麼申請理賠？」→ 意圖理解（Gemini 或示範判讀）→ 住院醫療理賠工作區 **35%**（事件資訊 20 + 服務辨識 15）→ 診斷書或住院證明 **70%**（文件 20 + 住院資訊完整 15，住院 5 天）→ 存摺影本 **90%**（匯款給付 20）→ 確認資料並填妥保險金申請書 **100%**（10）→ 依醫院選擇管道：醫起通（合作醫院）、理賠聯盟鏈或郵寄，並提醒醫起通仍需開立診斷書、聯盟鏈 10 日內寄回正本、單次超過新台幣 30 萬元需等正本寄達。
 
-住院理賠旅程由前端依官網資料計算；後端只負責 Gemini 意圖理解（`hospitalization_claim`）。Backend 原有的班機延誤旅程 API 仍保留，前端不再使用。
+住院理賠旅程由前端依官網資料計算；一般模式的後端負責意圖理解（`hospitalization_claim`）。Backend `POST /api/journeys` 對住院需求僅建立 `supported: false`、準備度 0 的需求預覽，文件與確認 API 回傳 `409 SERVICE_NOT_SUPPORTED`。Backend 原有的班機延誤旅程 API 仍保留，前端不再使用。
 
-100% 只代表資料完整，Workflow 仍停在 `READY_FOR_REVIEW`，不判斷保障、理賠資格、核准或送出申請。移除／替換文件會撤回分數與確認。目前 UI 文件不會讀取或上傳；只有明確啟用 Live 並通過 Free Tier guard 時，自然語言描述才會送到 Gemini。使用 Live Backend 文件 API 時，文件 bytes 會在本次 request 傳送至 Gemini；Demo 只讀指定 fixture，Repository 不儲存 bytes。FAQ 與來源面板仍標明示範知識庫。
+文件齊備時為 `READY_FOR_REVIEW`／90%；確認後為 `READY_TO_PROCEED`／100%。100% 只代表資料完整，不判斷保障、理賠資格、核准或送出申請。移除／替換文件會撤回分數與確認。目前 UI 文件不會讀取或上傳；只有明確啟用 Live 並通過 Free Tier guard 時，自然語言描述才會送到 Gemini。使用 Live Backend 文件 API 時，文件 bytes 會在本次 request 傳送至 Gemini；Demo 只讀指定 fixture，Repository 不儲存 bytes。
+
+Frontend 住院助手依本地官網整理資料提供說明與來源；Backend JSON 知識庫仍僅支援班機延誤，來源標明 prototype。住院／醫療等其他服務問題會回傳資訊不足與空來源，不會引用登機證或延誤證明，也不會呼叫 Gemini 補猜。
 
 其他已辨識需求只顯示「目前 Prototype 尚未開放完整服務旅程」，不展示假的完整 Workflow。模糊需求顯示「我還需要一些資訊」；低信心已知需求進入專員確認。真人接續僅準備本機摘要，不會聯絡專員。
 
