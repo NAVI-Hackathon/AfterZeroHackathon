@@ -178,7 +178,7 @@ test('knowledge retrieval stays explicitly prototype, unknown has no invented so
 });
 
 test('live does not silently mock document intelligence; config only allows explicit modes', async t => {
-  assert.equal(loadConfig({}).aiMode, 'live'); assert.equal(loadConfig({ AI_MODE: 'demo' }).aiMode, 'demo');
+  assert.equal(loadConfig({}).aiMode, 'demo'); assert.equal(loadConfig({ AI_MODE: 'demo' }).aiMode, 'demo');
   assert.throws(() => loadConfig({ AI_MODE: 'invalid' }));
   const api = await server(t, { mode: 'live', understandIntent: async () => result() });
   const journey = await api.create(); const response = await api.upload(journey.id, 'boarding_pass');

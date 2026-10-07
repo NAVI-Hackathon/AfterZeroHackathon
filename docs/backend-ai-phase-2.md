@@ -1,5 +1,7 @@
 # NAVI Developer B — Phase 2: Real AI Intelligence Integration
 
+> Historical Phase 2 record. Current startup defaults, model allowlist, zero-cost guards and evaluation commands are superseded by [Phase 3](backend-ai-phase-3.md). The Live results below are historical; no new Gemini requests were made in Phase 3.
+
 Backend real AI is implemented and independently verified. **The existing workspace still uses Mock documents and browser-owned state**; Developer A's API adapter is not part of this phase. No frontend layout, motion, persistence or mock website was changed.
 
 ## Architecture / files
@@ -39,9 +41,9 @@ npm install
 # First setup only; do not overwrite an existing local file.
 cp apps/api/.env.example apps/api/.env
 # Edit GEMINI_API_KEY locally; never put it in chat, frontend or Git.
-AI_MODE=live npm run dev:navi
+npm run dev:live  # requires confirmed unbilled Free Tier; see Phase 3
 # Without any Key, explicit scripted demo:
-AI_MODE=demo npm run dev:navi
+npm run dev:navi  # now forces Demo
 ```
 
 API `http://127.0.0.1:3001/api/health`; NAVI `http://127.0.0.1:5173/`; independent Mock Website `http://127.0.0.1:3000/` (`dev:all`). Stop/restart combined dev after backend or `.env` changes; use `dev:api` for file watching.
@@ -181,10 +183,10 @@ Live critical extraction never uses Demo facts. Failed upload preserves Journey 
 ```sh
 npm test                  # 10 frontend + 52 backend tests, no Key needed
 npm run build:navi
-npm run test:integration  # Real Gemini: Chinese/English flight, payment, accident, unknown
-npm run test:ai           # Real Gemini complete API flow + valid synthetic PDFs + knowledge
+npm run eval:ai:live -- --plan # current guarded live plan; no requests
+npm run eval:ai:live           # manual, Free Tier confirmation + budget + synthetic cache
 # Optional real local files; only use files you are authorized to send to Gemini:
-npm run test:ai -- --boarding /absolute/boarding.pdf --delay /absolute/delay.pdf
+# Private-file evaluation flags retired; current CLI accepts curated synthetic samples only.
 ```
 
 As of Phase 2 QA:

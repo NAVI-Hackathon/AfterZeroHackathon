@@ -7,7 +7,7 @@ const root = new URL('../', import.meta.url);
 // Keep combined demos stable; dev:api still offers opt-in file watching.
 const children = [
   spawn(process.execPath, [fileURLToPath(new URL('node_modules/vite/bin/vite.js', root))], { cwd: fileURLToPath(new URL('apps/web', root)), stdio: 'inherit' }),
-  spawn(process.execPath, ['--env-file-if-exists=.env', 'src/server.js'], { cwd: fileURLToPath(new URL('apps/api', root)), stdio: 'inherit' }),
+  spawn(process.execPath, ['--env-file-if-exists=.env', 'src/server.js'], { cwd: fileURLToPath(new URL('apps/api', root)), stdio: 'inherit', env: { ...process.env, AI_MODE: process.argv.includes('--live') ? 'live' : 'demo' } }),
 ];
 if (process.argv.includes('--all')) {
   const mockRoot = new URL('apps/mock-site/', root);

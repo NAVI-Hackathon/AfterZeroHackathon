@@ -4,11 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file-if-exists=.env --watch src/server.js",
+    "dev": "node --env-file-if-exists=.env --watch src/server.js --demo",
+    "dev:live": "node --env-file-if-exists=.env --watch src/server.js --live",
     "start": "node --env-file-if-exists=.env src/server.js",
-    "test": "node --test test/*.test.js",
-    "test:integration": "node --env-file-if-exists=.env test/integration.js",
-    "test:ai": "node --env-file-if-exists=.env scripts/test-gemini.js"
+    "test": "node --import ./test/networkGuard.js --test test/*.test.js",
+    "test:integration": "node eval/cli.js --local",
+    "test:ai": "node eval/cli.js --local",
+    "eval:ai": "node eval/cli.js --local",
+    "eval:ai:local": "node eval/cli.js --local",
+    "eval:ai:live": "node --env-file-if-exists=.env eval/cli.js --live",
+    "ai:status": "node --env-file-if-exists=.env scripts/ai-status.js"
   },
   "engines": {
     "node": ">=22.12"

@@ -15,7 +15,7 @@
     "test": "npm run test:web && npm run test:api",
     "dev:web": "npm run dev --workspace @navi/web",
     "dev:api": "npm run dev --workspace @navi/api",
-    "test:web": "node --test apps/web/src/domain/*.test.js apps/web/src/hooks/motion.test.js apps/web/src/services/*.test.js",
+    "test:web": "node --import ./apps/api/test/networkGuard.js --test apps/web/src/domain/*.test.js apps/web/src/hooks/motion.test.js apps/web/src/services/*.test.js",
     "test:api": "npm run test --workspace @navi/api",
     "test:integration": "npm run test:integration --workspace @navi/api",
     "dev:navi": "node scripts/dev.js",
@@ -27,7 +27,12 @@
     "lint": "npm run lint --workspace @navi/mock-site",
     "typecheck:mock": "npm run typecheck --workspace @navi/mock-site",
     "test:sites": "node scripts/verify-sites.js",
-    "test:ai": "npm run test:ai --workspace @navi/api --"
+    "test:ai": "npm run test:ai --workspace @navi/api --",
+    "eval:ai": "npm run eval:ai:local",
+    "eval:ai:local": "npm run eval:ai:local --workspace @navi/api --",
+    "eval:ai:live": "npm run eval:ai:live --workspace @navi/api --",
+    "ai:status": "npm run ai:status --workspace @navi/api",
+    "dev:live": "node scripts/dev.js --live"
   },
   "engines": {
     "node": ">=22.12"

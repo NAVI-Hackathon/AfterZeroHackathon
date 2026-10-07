@@ -9,7 +9,7 @@ import { UnderstandingSchema } from '../../../shared/intelligence.js';
 import { result, inputs } from './fixtures.js';
 
 async function server(t, provider, overrides = {}) {
-  const config = { ...loadConfig({}), ...overrides };
+  const config = { ...loadConfig({ AI_MODE: 'live' }), ...overrides };
   const http = createApp(config, provider).listen(0, '127.0.0.1');
   await new Promise(resolve => http.once('listening', resolve));
   t.after(() => new Promise(resolve => http.close(resolve)));
@@ -80,7 +80,7 @@ test('provider unavailable, failure, timeout, internal error and rate limit', as
 });
 
 test('Gemini REST transport uses a header key, structured schema and bounded output', async () => {
-  const config = { ...loadConfig({}), apiKey: 'test-key-not-a-real-secret' };
+  const config = { ...loadConfig({ AI_MODE: 'live', GEMINI_FREE_TIER_CONFIRMED: 'true' }), apiKey: 'test-key-not-a-real-secret' };
   let seen;
   const provider = createGeminiProvider(config, async (url, options) => {
     seen = { url, options, body: JSON.parse(options.body) };

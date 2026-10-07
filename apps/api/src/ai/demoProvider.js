@@ -2,7 +2,7 @@ import fixtures from '../../../../knowledge/documents.json' with { type: 'json' 
 
 export function createDemoProvider() {
   return {
-    mode: 'demo',
+    mode: 'demo', requiresPaidTier: false,
     async answerKnowledge(question, context) { return { answer: context.answer, confidence: 1, supported: true, sourceIds: context.sourceIds }; },
     // ponytail: scripted keyword demo only; use the existing live provider for actual language understanding.
     async understandIntent(message, signal) {

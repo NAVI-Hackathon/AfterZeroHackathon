@@ -1,7 +1,7 @@
+import { FREE_TIER_MODEL, DEFAULT_LIVE_REQUEST_LIMIT } from '../ai/costGuard.js';
 import { DEFAULT_CONFIDENCE_THRESHOLD } from '../../../../shared/intelligence.js';
 
-const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
-const THINKING_LEVELS = { 'gemini-3.5-flash-lite': 'MINIMAL', 'gemini-3.8-flash': 'LOW' };
+const DEFAULT_GEMINI_MODEL = FREE_TIER_MODEL;
 
 function numeric(env, name, fallback, min, max) {
   const value = env[name] === undefined || env[name] === '' ? fallback : Number(env[name]);
@@ -9,14 +9,21 @@ function numeric(env, name, fallback, min, max) {
   return value;
 }
 export function loadConfig(env = process.env) {
-  const aiMode = env.AI_MODE?.trim() || 'live';
+  if (env.ALLOW_PAID_AI && env.ALLOW_PAID_AI !== 'false') throw new Error('Paid AI is prohibited in NAVI');
+  const aiMode = env.AI_MODE?.trim() || 'demo';
   if (!['demo', 'live'].includes(aiMode)) throw new Error('Invalid AI_MODE configuration');
   const model = env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
   if (!/^[a-zA-Z0-9._-]+$/.test(model)) throw new Error('Invalid GEMINI_MODEL configuration');
+  const requestLimit = numeric(env, 'LIVE_AI_REQUEST_LIMIT', env.MAX_LIVE_EVAL_REQUESTS_PER_RUN ? Number(env.MAX_LIVE_EVAL_REQUESTS_PER_RUN) : DEFAULT_LIVE_REQUEST_LIMIT, 1, 1000);
+  if (!Number.isSafeInteger(requestLimit)) throw new Error('Invalid live AI request limit');
   return {
     aiMode,
     apiKey: env.GEMINI_API_KEY?.trim() || '', model,
-    thinkingLevel: THINKING_LEVELS[model],
+    thinkingLevel: model === FREE_TIER_MODEL ? 'MINIMAL' : undefined,
+    allowPaidAI: false, freeTierConfirmed: env.GEMINI_FREE_TIER_CONFIRMED === 'true',
+    ci: Boolean(env.CI && !['false', '0'].includes(env.CI.toLowerCase())),
+    liveRequestLimit: requestLimit,
+    rateLimitBackoffMs: 1000,
     port: numeric(env, 'PORT', 3001, 1, 65535), host: env.HOST || '127.0.0.1',
     origins: (env.WEB_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173').split(',').map(s => s.trim()).filter(Boolean),
     confidenceThreshold: numeric(env, 'INTENT_CONFIDENCE_THRESHOLD', DEFAULT_CONFIDENCE_THRESHOLD, 0, 1),

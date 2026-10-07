@@ -15,7 +15,7 @@ import { ApiError } from '../src/middleware/errorHandler.js';
 import { result } from './fixtures.js';
 import { samplePdf } from './sampleDocuments.js';
 
-const config = { ...loadConfig({ AI_MODE: 'live', GEMINI_API_KEY: 'test-key' }), rateLimit: 300 };
+const config = { ...loadConfig({ AI_MODE: 'live', GEMINI_API_KEY: 'test-key', GEMINI_FREE_TIER_CONFIRMED: 'true' }), rateLimit: 300 };
 const signal = () => new AbortController().signal;
 const response = raw => new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(raw) }] } }] }), { status: 200 });
 const fields = { passengerName: null, flightNumber: null, origin: null, destination: null, departureDate: null, actualDepartureDate: null, scheduledDeparture: null, actualDeparture: null };
