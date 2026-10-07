@@ -1,0 +1,169 @@
+import { useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import Icon from '../Icon.jsx';
+import ManualEntryForm from './ManualEntryForm.jsx';
+import { validateFile } from '../../domain/workflow.js';
+import { documentSpecs } from '../../mocks/flightDelay.js';
+import { city, clockText, dateText, delayText, minutesBetween } from '../../content/format.js';
+import { CheckDraw, useCountUp } from '../../motion/primitives.jsx';
+import { fadeUp, spring, staggerChildren, transition } from '../../motion/tokens.js';
+
+function fileError(code) {
+  if (!code) return '';
+  if (code.includes('empty')) return '這份文件是空的，請重新選擇。';
+  if (code.includes('10 MB')) return '文件超過 10 MB，請選擇較小的檔案。';
+  return '不支援這個檔案格式，請使用 PDF、PNG、JPG 或 WebP。';
+}
+
+function DelayValue({ minutes }) {
+  const shown = useCountUp(minutes ?? 0, { from: 0 });
+  return <>{minutes === null ? '待確認' : delayText(shown)}</>;
+}
+
+function fieldRows(type, fields) {
+  if (type === 'boarding_pass') {
+    return [
+      ['文件類型', '登機證'],
+      ['乘客姓名', fields.passengerName],
+      ['航線', `${city(fields.origin)} → ${city(fields.destination)}`],
+      ['航班', fields.flightNumber],
+      ['日期', dateText(fields.departureDate)],
+    ];
+  }
+  const minutes = minutesBetween(fields.scheduledDeparture, fields.actualDeparture);
+  return [
+    ['文件類型', '航空公司延誤證明'],
+    ['原訂起飛', clockText(fields.scheduledDeparture)],
+    ['實際起飛', clockText(fields.actualDeparture)],
+    ['確認延誤', <DelayValue key="delay" minutes={minutes} />, true],
+  ];
+}
+
+function Result({ type, document, filename }) {
+  const spec = documentSpecs[type];
+  return (
+    <motion.div className="doc-result" initial="hidden" animate="show" variants={staggerChildren(0.06, 0.05)}>
+      <motion.div className="doc-result-head" variants={fadeUp}>
+        <span className="doc-status"><CheckDraw size={12} strokeWidth={2.6} />{document.status === 'manual' ? '已手動確認' : '辨識完成'}</span>
+        <span className="doc-confidence">{document.status === 'manual' ? '手動輸入' : `辨識信心 ${Math.round(document.confidence * 100)}%`}</span>
+      </motion.div>
+      <dl className="doc-fields">
+        {fieldRows(type, document.fields).map(([label, value, emphasis]) => (
+          <motion.div key={label} className={emphasis ? 'is-emphasis' : ''} variants={fadeUp}>
+            <dt>{label}</dt><dd>{value}</dd>
+          </motion.div>
+        ))}
+      </dl>
+      <motion.p className="doc-match" variants={fadeUp}>
+        <Icon name="check" size={14} strokeWidth={2.2} />符合項目：{spec.match}
+      </motion.p>
+      {filename && document.status !== 'manual' && <motion.p className="doc-filename" variants={fadeUp}>{filename} · 示範辨識資料</motion.p>}
+    </motion.div>
+  );
+}
+
+function Analyzing() {
+  return (
+    <motion.div className="doc-analyzing" role="status" initial={{ opacity: 0 }} animate={{ opacity: 1, transition: transition.fast }} exit={{ opacity: 0, transition: transition.exit }}>
+      <div className="doc-skeleton" aria-hidden="true">
+        <span className="shimmer w-40" /><span className="shimmer w-70" /><span className="shimmer w-55" /><span className="shimmer w-65" />
+      </div>
+      <p><strong>正在辨識文件…</strong>整理欄位並比對文件要求</p>
+    </motion.div>
+  );
+}
+
+export default function DocumentCard({ type, document, filename, uiState, busy, onUpload, onRemove, onManual, onRetry, registerInput }) {
+  const spec = documentSpecs[type];
+  const input = useRef(null);
+  const depth = useRef(0);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState('');
+  const processing = uiState?.status === 'processing';
+  const failed = uiState?.status === 'failed';
+  const manual = uiState?.status === 'manual';
+  const disabled = Boolean(busy);
+
+  function receive(files) {
+    depth.current = 0; setDragging(false);
+    if (disabled) return;
+    if (files.length !== 1) { setError('請一次上傳一份文件。'); return; }
+    const problem = validateFile(files[0]);
+    setError(fileError(problem));
+    if (!problem) onUpload(type, { filename: files[0].name });
+  }
+  function bindInput(el) { input.current = el; registerInput?.(type, el); }
+
+  const state = processing ? 'analyzing' : document ? 'result' : manual ? 'manual' : failed ? 'failed' : 'empty';
+
+  return (
+    <motion.article
+      layout="position" transition={transition.normal}
+      className={`doc-card is-${state} ${dragging ? 'is-dragging' : ''}`} data-document={type} aria-busy={processing}
+      onDragEnter={e => { e.preventDefault(); depth.current += 1; if (!disabled && !document) setDragging(true); }}
+      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = disabled || document ? 'none' : 'copy'; }}
+      onDragLeave={e => { e.preventDefault(); depth.current = Math.max(0, depth.current - 1); if (!depth.current) setDragging(false); }}
+      onDrop={e => { e.preventDefault(); if (!document) receive(Array.from(e.dataTransfer.files)); else { depth.current = 0; setDragging(false); } }}
+    >
+      <header className="doc-header">
+        <span className="doc-icon">{document ? <CheckDraw size={16} strokeWidth={2.2} /> : <Icon name="document" size={17} />}</span>
+        <div>
+          <h3>{spec.title}</h3>
+          <p>{spec.hint}</p>
+        </div>
+        {document ? (
+          <button type="button" className="icon-button" aria-label={`移除${spec.title}`} disabled={disabled} onClick={() => onRemove(type)}>
+            <Icon name="trash" size={16} />
+          </button>
+        ) : <span className="doc-gain">+{spec.gain}%</span>}
+      </header>
+
+      <AnimatePresence mode="wait" initial={false}>
+        {state === 'analyzing' && <Analyzing key="analyzing" />}
+
+        {state === 'result' && (
+          <motion.div key="result" initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1, transition: spring }} exit={{ opacity: 0, transition: transition.exit }}>
+            <Result type={type} document={document} filename={filename} />
+          </motion.div>
+        )}
+
+        {state === 'failed' && (
+          <motion.div key="failed" className="doc-failed" role="alert" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: transition.enter }} exit={{ opacity: 0, transition: transition.exit }}>
+            <Icon name="alert" size={18} />
+            <div>
+              <strong>暫時無法辨識這份文件</strong>
+              <p>你可以重新上傳較清楚的照片，或手動確認文件內容。</p>
+              <div className="doc-failed-actions">
+                <button type="button" className="button button-secondary button-small" onClick={() => { onRetry(type); input.current?.click(); }}>重新上傳<Icon name="upload" size={15} /></button>
+                <button type="button" className="button button-ghost button-small" onClick={() => onManual(type, null)}>手動輸入<Icon name="edit" size={15} /></button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {state === 'manual' && (
+          <motion.div key="manual" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: transition.enter }} exit={{ opacity: 0, transition: transition.exit }}>
+            <ManualEntryForm type={type} onSubmit={fields => onManual(type, fields)} onCancel={() => onRetry(type)} />
+          </motion.div>
+        )}
+
+        {state === 'empty' && (
+          <motion.div key="empty" className="dropzone" initial={{ opacity: 0 }} animate={{ opacity: 1, scale: dragging ? 1.01 : 1, transition: transition.fast }} exit={{ opacity: 0, transition: transition.exit }}>
+            <motion.span className="dropzone-icon" animate={{ y: dragging ? -3 : 0 }} transition={transition.fast}><Icon name="upload" size={20} /></motion.span>
+            <p className="dropzone-title">{dragging ? '放開即可上傳' : '拖曳文件到這裡'}</p>
+            <p className="dropzone-hint">PDF、PNG、JPG、WebP，10 MB 以內</p>
+            <div className="dropzone-actions">
+              <button type="button" className="button button-secondary button-small" disabled={disabled} onClick={() => input.current?.click()}>選擇文件</button>
+              <button type="button" className="link-button" disabled={disabled} onClick={() => { setError(''); onUpload(type, { sample: true }); }}>使用範例{spec.title}</button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <input ref={bindInput} className="visually-hidden" type="file" tabIndex={-1} data-upload={type}
+        aria-label={`上傳${spec.title}`} accept="application/pdf,image/jpeg,image/png,image/webp" disabled={disabled}
+        onChange={e => { receive(Array.from(e.target.files)); e.target.value = ''; }} />
+      {error && <p className="inline-error" role="alert"><Icon name="info" size={15} />{error}</p>}
+    </motion.article>
+  );
+}

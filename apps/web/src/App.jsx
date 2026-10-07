@@ -1,141 +1,254 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import Icon, { Mark } from './components/Icon.jsx';
-import Dialog from './components/Dialog.jsx';
-import Landing from './components/Landing.jsx';
-import Journey from './components/Journey.jsx';
-import Review, { Handoff, Sources } from './components/Review.jsx';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, LayoutGroup, MotionConfig, useReducedMotion } from 'motion/react';
+import AppHeader from './components/AppHeader.jsx';
+import Landing from './components/landing/Landing.jsx';
+import Workspace from './components/workspace/Workspace.jsx';
 import Toast from './components/Toast.jsx';
-import ReadinessPanel from './components/ReadinessPanel.jsx';
-import Copilot from './components/Copilot.jsx';
-import { createCase, addMockEvidence, removeEvidence, deriveWorkflow, readSession, STORAGE_KEY, LEGACY_STORAGE_KEY, documents, rules } from './domain/workflow.js';
+import { HandoffDialog, ProceedDialog, ReviewDialog, ServiceDialog } from './components/dialogs/JourneyDialogs.jsx';
+import { createApiAdapter, createMockAdapter, isDemoPath } from './services/adapters.js';
+import { analysisErrors } from './services/intelligence.js';
 import { intelligenceLabels } from './domain/intelligence.js';
-import { understandIntent, waitForAnalysis } from './services/intelligence.js';
-import { DEMO_STORY, documentCopy, requirementCopy, serviceCopy } from './presentation.js';
-import { MotionContext, motionMs, useAnimatedNumber, useReducedMotion } from './hooks/useMotion.js';
-import sources from '../../../knowledge/sitemap.json';
+import { documentSpecs } from './mocks/flightDelay.js';
 
-const tabs=[{id:'overview',title:'總覽',icon:'shield'},{id:'journey',title:'旅程',icon:'route'},{id:'assistant',title:'助理',icon:'spark'}];
-function Header({claim,inWorkspace,busy,onHome,onResume,onGuide,onReset,reduced,onReduce}) {
-  const menu=useRef(null);
-  useEffect(()=>{
-    function dismiss(e) {
-      if(e.type==='keydown' && e.key==='Escape' && menu.current.open){menu.current.open=false;menu.current.querySelector('summary').focus();}
-      else if(e.type==='pointerdown' && !menu.current.contains(e.target))menu.current.open=false;
-    }
-    document.addEventListener('pointerdown',dismiss);document.addEventListener('keydown',dismiss);
-    return ()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',dismiss);};
-  },[]);
-  function choose(action) {menu.current.open=false;action();}
-  return <header className="site-header"><div className="header-inner"><button type="button" className="brand" onClick={onHome} disabled={busy} aria-label="NAVI 首頁"><Mark/><span className="wordmark">NAVI<small>AI Service Journey Navigator</small></span></button><nav aria-label="主要導覽">{claim && <span className="header-case">{claim.id}</span>}{claim && !inWorkspace && <button className="nav-link" type="button" disabled={busy} onClick={onResume}>返回案件<Icon name="arrow" size={14}/></button>}<details className="header-menu" ref={menu}><summary aria-label="更多選項"><Icon name="more" size={20}/></summary><div className="menu-popover"><span className="eyebrow">NAVI</span><button type="button" disabled={busy} onClick={()=>choose(onGuide)}><Icon name="book" size={16}/>示範導覽</button><button type="button" onClick={()=>choose(onReset)}><Icon name="reset" size={16}/>重新開始示範</button><label><input type="checkbox" checked={reduced} onChange={e=>onReduce(e.target.checked)}/>減少動畫</label></div></details></nav></div></header>;
+const mode = isDemoPath(location.pathname) ? 'demo' : 'live';
+
+const errorCopy = {
+  ...analysisErrors,
+  AI_NOT_CONFIGURED: ['AI 分析服務尚未啟用', '目前無法使用 AI 分析。你可以改用示範模式，體驗完整的服務旅程。'],
+  API_UNAVAILABLE: ['分析服務暫時無法使用', '請稍後再試一次，或改用示範模式。'],
+  AI_PROVIDER_ERROR: ['分析服務暫時無法回應', '請稍後再試一次，或改用示範模式。'],
+};
+
+function feedbackFor(understanding) {
+  if (understanding.meta.outcome === 'clarification') {
+    return { kind: 'clarification', title: '我還需要一些資訊', body: '可以再多描述一點嗎？例如發生了什麼事、你想處理哪一件事。' };
+  }
+  return {
+    kind: 'preview',
+    title: intelligenceLabels[understanding.data.serviceType],
+    body: `${understanding.data.summary} 這項服務的完整旅程尚未開放，你可以重新描述，或由專員協助。`,
+  };
+}
+
+function wait(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (ms <= 0) { resolve(); return; }
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason); }, { once: true });
+  });
 }
 
 export default function App() {
-  const [claim,setClaim]=useState(()=>{try{return readSession(sessionStorage);}catch{return null;}});
-  const [page,setPage]=useState(()=>location.hash==='#workspace'?'workspace':'home');
-  const [analysis,setAnalysis]=useState(null), [interpretation,setInterpretation]=useState(null);
-  const [analysisError,setAnalysisError]=useState(null), [analysisResult,setAnalysisResult]=useState(null);
-  const [busy,setBusy]=useState(null), [failure,setFailure]=useState(null), [failNext,setFailNext]=useState(false);
-  const [dialog,setDialog]=useState(null), [notice,setNotice]=useState(''), [storageError,setStorageError]=useState(false);
-  const [tab,setTab]=useState('overview'), [assistantOpen,setAssistantOpen]=useState(false), [revision,setRevision]=useState(0);
-  const [reduce,setReduce]=useState(false);
-  const reduced=useReducedMotion() || reduce;
-  const timers=useRef([]), busyRef=useRef(false), analysisRequest=useRef(null);
-  const workflow=deriveWorkflow(claim), score=useAnimatedNumber(workflow.score,reduced);
-  const inWorkspace=page==='workspace' && Boolean(claim);
-  const dismissNotice=useCallback(()=>setNotice(''),[]);
-  function cancelWork() {analysisRequest.current?.abort();analysisRequest.current=null;timers.current.forEach(clearTimeout);timers.current=[];busyRef.current=false;setBusy(null);setAnalysis(null);}
-  function later(callback,delay) {timers.current.push(setTimeout(callback,delay));}
-  useEffect(()=>{
-    const onHash=()=>{cancelWork();setPage(location.hash==='#workspace'?'workspace':'home');};
-    window.addEventListener('hashchange',onHash);
-    return ()=>{window.removeEventListener('hashchange',onHash);analysisRequest.current?.abort();timers.current.forEach(clearTimeout);};
-  },[]);
-  useEffect(()=>{
-    try {if(claim)sessionStorage.setItem(STORAGE_KEY,JSON.stringify(claim));else sessionStorage.removeItem(STORAGE_KEY);sessionStorage.removeItem(LEGACY_STORAGE_KEY);setStorageError(false);}catch{setStorageError(true);}
-  },[claim]);
-  useEffect(()=>{document.documentElement.dataset.reducedMotion=String(reduced);return ()=>delete document.documentElement.dataset.reducedMotion;},[reduced]);
-  useEffect(()=>{
-    if(!inWorkspace)return;
-    window.scrollTo(0,0);document.getElementById('workspace-title')?.focus();
-  },[inWorkspace]);
-  function navigate(next) {cancelWork();history.pushState(null,'',next==='workspace'?'#workspace':location.pathname);setPage(next);setDialog(null);window.scrollTo(0,0);}
-  function upload(type,filename) {
-    if(busyRef.current)return;
-    busyRef.current=true;setBusy(type);setFailure(null);setNotice('');setTab('journey');
-    const shouldFail=failNext;setFailNext(false);
-    later(()=>{
-      if(shouldFail)setFailure({type,filename});
-      else {setClaim(current=>addMockEvidence(current,type,filename));setNotice(`${documentCopy[type].title}已辨識，資料已更新。`);}
-      busyRef.current=false;setBusy(null);
-    },motionMs('--document-processing'));
+  const service = useMemo(() => (mode === 'demo' ? createMockAdapter() : createApiAdapter()), []);
+  const [snapshot, setSnapshot] = useState(() => service.restore());
+  const [view, setView] = useState(() => (location.hash === '#workspace' && snapshot ? 'workspace' : 'landing'));
+  const [analysisPhase, setAnalysisPhase] = useState(null);
+  const [feedback, setFeedback] = useState(null);
+  const [docStates, setDocStates] = useState({});
+  const [dialog, setDialog] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [tab, setTab] = useState('journey');
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [failNext, setFailNext] = useState(false);
+  const [landingKey, setLandingKey] = useState(0);
+  const systemReduced = useReducedMotion();
+  const reduced = reduceMotion || systemReduced;
+
+  const analysisCtl = useRef(null);
+  const snapshotRef = useRef(snapshot);
+  const fileInputs = useRef({});
+  useEffect(() => { snapshotRef.current = snapshot; }, [snapshot]);
+  useEffect(() => { document.documentElement.dataset.reducedMotion = String(reduced); }, [reduced]);
+
+  useEffect(() => {
+    const onPop = () => {
+      analysisCtl.current?.abort();
+      setAnalysisPhase(null);
+      setDialog(null);
+      setView(location.hash === '#workspace' && snapshotRef.current ? 'workspace' : 'landing');
+    };
+    window.addEventListener('popstate', onPop);
+    return () => { window.removeEventListener('popstate', onPop); analysisCtl.current?.abort(); };
+  }, []);
+
+  const busyType = Object.entries(docStates).find(([, s]) => s.status === 'processing')?.[0] ?? null;
+  const notify = useCallback(message => setToast({ message, key: Date.now() }), []);
+  const dismissToast = useCallback(() => setToast(null), []);
+  const closeDialog = useCallback(() => setDialog(null), []);
+
+  function goWorkspace() {
+    history.pushState(null, '', '#workspace');
+    setView('workspace');
+    window.scrollTo(0, 0);
   }
-  async function start(text,attachment) {
-    if(busyRef.current)return;
-    cancelWork();setDialog(null);setInterpretation(null);setAnalysisError(null);setAnalysisResult(null);setAnalysis(0);busyRef.current=true;
-    const controller=new AbortController();analysisRequest.current=controller;
-    const started=performance.now(), total=reduced?0:motionMs('--analysis-total');
+  function goLanding() {
+    history.pushState(null, '', location.pathname);
+    setView('landing');
+    window.scrollTo(0, 0);
+  }
+
+  async function start(text) {
+    analysisCtl.current?.abort();
+    const ctl = new AbortController();
+    analysisCtl.current = ctl;
+    setFeedback(null);
+    setAnalysisPhase(0);
+    const step = reduced ? 0 : 640;
+    const startedAt = performance.now();
     try {
-      const result=await understandIntent(text,{signal:controller.signal});
-      controller.signal.throwIfAborted();setInterpretation(result);setAnalysis(1);
-      await waitForAnalysis(Math.max(0,total*.7-(performance.now()-started)),controller.signal);
-      setAnalysis(2);await waitForAnalysis(total*.1,controller.signal);
-      const next=createCase(text,result);
-      if(result.meta.outcome==='supported' || result.meta.outcome==='human_review') {
-        setAnalysis(3);await waitForAnalysis(total*.2,controller.signal);
-        setClaim(next);setTab('overview');setFailure(null);setNotice('');navigate('workspace');
-        if(attachment && result.meta.outcome==='supported')upload('boarding_pass',attachment);
-      } else {
-        setAnalysisResult(result);setAnalysis(null);busyRef.current=false;analysisRequest.current=null;
-        requestAnimationFrame(()=>document.getElementById('analysis-result-title')?.focus());
+      const result = await service.analyze(text, { signal: ctl.signal });
+      await wait(step + 160 - (performance.now() - startedAt), ctl.signal);
+      setAnalysisPhase(1);
+      await wait(step, ctl.signal);
+      if (!result.snapshot) {
+        setAnalysisPhase(null);
+        setFeedback(feedbackFor(result.understanding));
+        requestAnimationFrame(() => document.getElementById('feedback-title')?.focus());
+        return;
       }
-    } catch(error) {
-      if(controller.signal.aborted)return;
-      await waitForAnalysis(Math.max(0,total-(performance.now()-started)),controller.signal).catch(()=>{});
-      if(controller.signal.aborted)return;
-      setAnalysisError(error.code || 'NETWORK_ERROR');setAnalysis(null);busyRef.current=false;analysisRequest.current=null;
-      requestAnimationFrame(()=>document.getElementById('analysis-error-title')?.focus());
+      setAnalysisPhase(2);
+      await wait(step, ctl.signal);
+      setDocStates({});
+      setTab('journey');
+      setSnapshot(result.snapshot);
+      setAnalysisPhase(null);
+      goWorkspace();
+    } catch (error) {
+      if (ctl.signal.aborted) return;
+      setAnalysisPhase(null);
+      const [title, body] = errorCopy[error?.code] ?? errorCopy.DEFAULT;
+      setFeedback({ kind: 'error', title, body });
+      requestAnimationFrame(() => document.getElementById('feedback-title')?.focus());
     }
   }
-  function handoffResult(text) {
-    if(!analysisResult)return;
-    setDialog({type:'specialist',previewCase:createCase(text,analysisResult)});
+
+  async function upload(type, source) {
+    if (busyType) return;
+    setDocStates(s => ({ ...s, [type]: { status: 'processing' } }));
+    try {
+      const next = await service.uploadDocument(type, source);
+      setSnapshot(next);
+      setDocStates(s => ({ ...s, [type]: { status: 'idle' } }));
+      notify(`${documentSpecs[type].title}已辨識，準備完成度已更新。`);
+    } catch {
+      setDocStates(s => ({ ...s, [type]: { status: 'failed' } }));
+    } finally {
+      setFailNext(false);
+    }
   }
-  function reset() {cancelWork();setAnalysisError(null);setAnalysisResult(null);setClaim(null);setFailure(null);setFailNext(false);setTab('overview');setRevision(r=>r+1);navigate('home');setNotice('已重新開始，可以描述新的情況。');}
-  function nextAction(override) {
-    const next=override || workflow.next;
-    if(['boarding_pass','delay_certificate'].includes(next)) {
-      setTab('journey');
-      // Wait one frame for the mobile panel to become visible before opening its native picker.
-      requestAnimationFrame(()=>{
-        const input=document.querySelector(`[data-upload="${next}"]`);
-        input?.closest('article').scrollIntoView({behavior:reduced?'instant':'smooth',block:'center'});input?.click();
-      });
-    } else setDialog({type:next==='review' && claim.confirmed?'proceed':next});
+
+  const actions = {
+    upload,
+    remove(type) {
+      setSnapshot(service.removeDocument(type));
+      setDocStates(s => ({ ...s, [type]: { status: 'idle' } }));
+      notify('文件已移除，準備完成度已更新。');
+    },
+    manual(type, fields) {
+      if (!fields) { setDocStates(s => ({ ...s, [type]: { status: 'manual' } })); return; }
+      setSnapshot(service.submitManual(type, fields));
+      setDocStates(s => ({ ...s, [type]: { status: 'idle' } }));
+      notify(`${documentSpecs[type].title}內容已確認，準備完成度已更新。`);
+    },
+    resetDocument(type) { setDocStates(s => ({ ...s, [type]: { status: 'idle' } })); },
+    review() { setDialog('review'); },
+    proceed() { setDialog('proceed'); },
+    handoff() { setDialog('handoff'); },
+    next(action) {
+      switch (action.type) {
+        case 'UPLOAD_DOCUMENT': {
+          const mobile = matchMedia('(max-width: 767.98px)').matches;
+          if (mobile) setTab('documents');
+          // On mobile the documents tab mounts only after the previous tab's exit animation,
+          // so wait until the target input is actually in the DOM before opening the picker.
+          const startedAt = performance.now();
+          const openPicker = () => {
+            const input = fileInputs.current[action.target];
+            if (input?.isConnected) {
+              input.closest('article')?.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
+              input.click();
+            } else if (performance.now() - startedAt < 1200) {
+              setTimeout(openPicker, 50);
+            }
+          };
+          setTimeout(openPicker, 0);
+          break;
+        }
+        case 'REVIEW_DATA': setDialog('review'); break;
+        case 'PROCEED_TO_SERVICE': setDialog('proceed'); break;
+        case 'VIEW_SERVICE': setDialog('service'); break;
+        default: setDialog('handoff');
+      }
+    },
+  };
+
+  function reset() {
+    analysisCtl.current?.abort();
+    service.reset();
+    setSnapshot(null);
+    setAnalysisPhase(null);
+    setFeedback(null);
+    setDocStates({});
+    setDialog(null);
+    setLandingKey(k => k + 1);
+    goLanding();
+    notify('已重新開始，可以描述新的情況。');
   }
-  function showSources(ids) {setDialog({type:'source',ids,returnTo:dialog?.type==='review'?'review':null});}
-  function onTabKey(e,index) {
-    const next=e.key==='ArrowRight'?(index+1)%3:e.key==='ArrowLeft'?(index+2)%3:e.key==='Home'?0:e.key==='End'?2:null;
-    if(next!==null){e.preventDefault();setTab(tabs[next].id);document.getElementById('tab-'+tabs[next].id)?.focus();}
-  }
-  const titles={guide:['示範導覽','Demo Guide'],score:['準備度計算說明','Readiness'],source:['資料來源','Sources'],review:['確認案件資料','Review'],specialist:['專員協助','Human Handoff'],service_preview:['服務下一步','Service Navigation'],proceed:['即將前往既有理賠服務','Continue to Service']};
-  const dialogTitle=titles[dialog?.type];
-  return <MotionContext value={reduce}><div className="app-shell"><a className="skip-link" href="#main-content" onClick={e=>{e.preventDefault();const main=document.getElementById('main-content');main.tabIndex=-1;main.focus();}}>跳至主要內容</a><Header claim={claim} inWorkspace={inWorkspace} busy={analysis!==null || Boolean(busy)} onHome={()=>navigate('home')} onResume={()=>navigate('workspace')} onGuide={()=>setDialog({type:'guide'})} onReset={reset} reduced={reduce} onReduce={setReduce}/>
-    {!inWorkspace ? <Landing key={revision} onStart={start} analysis={analysis} interpretation={interpretation} analysisError={analysisError} result={analysisResult} onHandoff={handoffResult} onEdit={()=>{setAnalysisError(null);setAnalysisResult(null);}}/> : <main className="workspace" id="main-content"><div className="workspace-heading"><div><span className="eyebrow">你的服務工作區</span><h1 id="workspace-title" tabIndex={-1}>{claim.intelligence ? intelligenceLabels[claim.intelligence.data.serviceType] : serviceCopy[workflow.service.id].title}<span>{workflow.service.id==='unknown' && claim.intelligence ? 'Service Review' : serviceCopy[workflow.service.id].english}</span></h1></div><div className="workspace-state"><span className="status-dot"/><span>{workflow.state==='HUMAN_REVIEW'?'需要專員確認':claim.confirmed?'資料已準備完成':workflow.score>=90?'已準備完成，可進行確認':'正在準備資料'}</span><small>{storageError?'目前僅保留於記憶體':'已保留此分頁進度'}</small></div></div>
-      {claim.intelligence?.meta.source==='demo_fallback' && <p className="fallback-notice" role="status"><Icon name="info" size={15}/>示範備援判讀 · 本次未使用 AI 分析</p>}
-      <nav className="workspace-tabs" role="tablist" aria-label="工作區檢視">{tabs.map((item,i)=><button id={'tab-'+item.id} type="button" role="tab" key={item.id} aria-selected={tab===item.id} aria-controls={'panel-'+item.id} tabIndex={tab===item.id?0:-1} onKeyDown={e=>onTabKey(e,i)} onClick={()=>setTab(item.id)}><Icon name={item.icon} size={16}/>{item.title}{item.id==='overview' && workflow.service.id==='flight_delay' && <span>{Math.round(score)}%</span>}</button>)}</nav>
-      <button type="button" className="tablet-assistant-toggle inline-button" aria-expanded={assistantOpen} onClick={()=>setAssistantOpen(o=>!o)}><Icon name="spark" size={16}/>{assistantOpen?'收合服務助理':'展開服務助理'}<Icon name="chevron" size={14}/></button>
-      <div className={`workspace-grid ${assistantOpen?'assistant-open':''}`} data-tab={tab}><Copilot key={claim.createdAt} claim={claim} workflow={workflow} busy={busy} onSources={showSources}/><Journey claim={claim} workflow={workflow} busy={busy} failure={failure} onUpload={upload} onRemove={type=>{setFailure(null);setClaim(current=>removeEvidence(current,type));setNotice('文件已移除，準備度與下一步已更新。');}} onSources={showSources} onReview={()=>setDialog({type:'review'})} onPreview={()=>setDialog({type:workflow.state==='HUMAN_REVIEW'?'specialist':'service_preview'})}/><ReadinessPanel workflow={workflow} score={score} confirmed={claim.confirmed} busy={busy} onNext={nextAction} onSample={type=>upload(type,documents[type].sampleName)} onBreakdown={()=>setDialog({type:'score'})}/></div>
-      <footer className="page-footer"><span><Icon name="lock" size={13}/>事件描述交由 AI 分析；文件留在裝置，進度保留於此分頁。</span><span>NAVI <span className="footer-separator">/</span> Service Navigation</span></footer>
-    </main>}
-    {dialog && <Dialog key={dialog.type} title={dialogTitle[0]} english={dialogTitle[1]} variant={dialog.type==='source'?'source-sheet':dialog.type==='review'?'review-dialog':''} onClose={()=>setDialog(null)}>
-      {dialog.type==='guide' && <><p className="dialog-lead">一個情況，兩份文件，清楚的下一步。</p><ol className="demo-instructions"><li><strong>描述班機延誤</strong><p>開始分析後，準備度從 35% 開始。</p></li><li><strong>上傳或使用範例登機證</strong><p>航班資料補齊，準備度提升至 70%。</p></li><li><strong>加入航空公司延誤證明</strong><p>確認 14:20 → 21:43，共 7 小時 23 分，準備度達 90%。</p></li><li><strong>確認案件資料</strong><p>完成確認後達 100%，預覽前往既有理賠服務。</p></li></ol><div className="dialog-notice"><Icon name="info" size={17}/><p>事件描述會交由 AI 理解；文件與知識說明仍使用示範資料，不會讀取或上傳文件內容，也不會送出理賠申請。若啟用備援，畫面會明確標示。</p></div><label className="demo-failure-check"><input type="checkbox" checked={failNext} onChange={e=>setFailNext(e.target.checked)}/>下次文件辨識顯示失敗情境</label><button className="button button-primary full-width" type="button" onClick={()=>start(DEMO_STORY,null)}>開始班機延誤示範<Icon name="arrow" size={17}/></button></>}
-      {dialog.type==='score' && <><p className="dialog-lead">每補齊一項資料，就更接近下一步。</p><p>準備度依已完成的資料項目累加。</p><div className="score-breakdown">{rules.readiness.map(r=><div key={r.id}><span>{requirementCopy[r.id]}</span><strong>{r.weight}<small>分</small></strong></div>)}<div><span>總計</span><strong>100<small>分</small></strong></div></div><div className="dialog-notice"><Icon name="shield" size={18}/><p>準備度代表資料完整性，不判定保障範圍、理賠資格或金額。</p></div></>}
-      {dialog.type==='source' && <Sources items={sources.filter(s=>dialog.ids.includes(s.id))} onBack={dialog.returnTo?()=>setDialog({type:dialog.returnTo}):null}/>}
-      {dialog.type==='review' && claim?.evidence.boarding_pass && claim?.evidence.delay_certificate && <Review claim={claim} workflow={workflow} onConfirm={()=>{setClaim(c=>({...c,confirmed:true}));setNotice('資料已確認，準備度已達 100%。');}} onProceed={()=>setDialog({type:'proceed'})} onSources={showSources}/>}
-      {dialog.type==='specialist' && (dialog.previewCase || claim) && <Handoff claim={dialog.previewCase || claim} workflow={dialog.previewCase ? deriveWorkflow(dialog.previewCase) : workflow} onPrepare={()=>dialog.previewCase ? setDialog(d=>({...d,previewCase:{...d.previewCase,handoffRequested:true}})) : setClaim(c=>({...c,handoffRequested:true}))}/>}
-      {dialog.type==='service_preview' && claim && <><p className="dialog-lead">{serviceCopy[workflow.service.id].title}</p><p>{serviceCopy[workflow.service.id].description}</p><ol className="demo-instructions">{(workflow.service.id==='car_accident'?['記下事故日期、地點與相關人員。','準備事故照片及相關事故紀錄。','由專員確認保障與處理流程。']:['備妥保單號碼及帳戶資訊。','透過既有客戶平台完成身分確認。','選擇可使用的繳費方式，確認變更內容。']).map(step=><li key={step}>{step}</li>)}</ol><p className="dialog-footnote">目前提供服務引導預覽，後續由既有平台或專員接續。</p><button type="button" className="button button-primary full-width" onClick={()=>setDialog({type:'specialist'})}>轉由專員協助<Icon name="arrow" size={17}/></button></>}
-      {dialog.type==='proceed' && <div className="proceed-content"><span className="handoff-symbol"><Icon name="arrow" size={30}/></span><h3>你的資料已準備完成</h3><p>NAVI 已整理案件資訊與文件。下一步將由既有理賠服務接續處理，保留保險公司的審核與決策流程。</p><div className="dialog-notice"><Icon name="info" size={17}/><p>本次僅展示服務導引，不會連線至正式平台或送出申請。</p></div><button type="button" className="button button-primary full-width" onClick={()=>{setDialog(null);setNotice('服務導引已完成，案件資料保留於此分頁。');}}>完成導引<Icon name="check" size={17}/></button></div>}
-    </Dialog>}
-    {notice && <Toast key={notice} message={notice} onDismiss={dismissNotice}/>}
-  </div></MotionContext>;
+
+  return (
+    <MotionConfig reducedMotion={reduceMotion ? 'always' : 'user'}>
+      <div className="app-shell">
+        <a className="skip-link" href="#main-content">跳至主要內容</a>
+        <AppHeader
+          mode={mode} view={view} hasJourney={Boolean(snapshot)} busy={analysisPhase !== null || Boolean(busyType)}
+          onHome={goLanding} onResume={goWorkspace} onReset={reset}
+          reduceMotion={reduceMotion} onReduceMotion={setReduceMotion}
+          failNext={failNext} onFailNext={value => { setFailNext(value); service.setFailNextDocument(value); }}
+        />
+        {mode === 'demo' && (
+          <p className="demo-banner" role="note">示範模式：使用示範資料展示完整流程，不連線 AI，也不會送出任何申請。</p>
+        )}
+
+        <LayoutGroup>
+          <AnimatePresence mode="popLayout" initial={false}>
+            {view === 'workspace' && snapshot ? (
+              <Workspace
+                key="workspace" snapshot={snapshot} docStates={docStates} busy={busyType}
+                tab={tab} onTab={setTab} assistantOpen={assistantOpen} onAssistantOpen={setAssistantOpen}
+                actions={actions} registerInput={(type, el) => { fileInputs.current[type] = el; }}
+              />
+            ) : (
+              <Landing
+                key={`landing-${landingKey}`} mode={mode} analysisPhase={analysisPhase} feedback={feedback}
+                onStart={start} onRetry={start} onClearFeedback={() => setFeedback(null)}
+              />
+            )}
+          </AnimatePresence>
+        </LayoutGroup>
+
+        <AnimatePresence>
+          {snapshot && dialog === 'review' && (
+            <ReviewDialog key="review" snapshot={snapshot} onClose={closeDialog}
+              onConfirm={() => { setSnapshot(service.confirm()); setDialog(null); notify('資料已確認，準備完成度已達 100%。'); }}
+              onProceed={() => setDialog('proceed')} />
+          )}
+          {snapshot && dialog === 'proceed' && (
+            <ProceedDialog key="proceed" snapshot={snapshot} onClose={closeDialog}
+              onDone={() => { setDialog(null); notify('服務導引已完成，案件資料保留在這個分頁。'); }} />
+          )}
+          {snapshot && dialog === 'handoff' && (
+            <HandoffDialog key="handoff" snapshot={snapshot} onClose={closeDialog} onPrepared={() => setSnapshot(service.requestHandoff())} />
+          )}
+          {snapshot && dialog === 'service' && (
+            <ServiceDialog key="service" snapshot={snapshot} onClose={closeDialog} onHandoff={() => setDialog('handoff')} />
+          )}
+        </AnimatePresence>
+
+        <div className="toast-region" aria-live="polite">
+          <AnimatePresence>{toast && <Toast key={toast.key} message={toast.message} onDismiss={dismissToast} />}</AnimatePresence>
+        </div>
+      </div>
+    </MotionConfig>
+  );
 }

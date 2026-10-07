@@ -1,0 +1,81 @@
+/* NAVI design tokens — Premium Dark (original NAVI visual style).
+   Canvas #0A0B0D, surface #101215, raised #15181C; text #EEEFE9 / #B4BABB / #90989D;
+   a small sage accent #97C9B3 for progress, success, active and focus. */
+
+:root {
+  color-scheme: dark;
+
+  /* Color — neutrals */
+  --color-canvas: #0a0b0d;
+  --color-surface: #101215;
+  --color-surface-muted: #15181c;   /* raised */
+  --color-surface-sunken: #1b1f24;  /* hover */
+  --color-ink: #eeefe9;
+  --color-text: #eeefe9;
+  --color-text-secondary: #b4babb;
+  --color-text-muted: #90989d;
+  --color-border: rgba(235, 241, 240, 0.09);
+  --color-border-strong: rgba(235, 241, 240, 0.18);
+
+  /* Color — accent */
+  --color-accent: #97c9b3;
+  --color-accent-soft: rgba(151, 201, 179, 0.08);
+  --color-accent-line: rgba(151, 201, 179, 0.38);
+  --color-accent-ring: rgba(151, 201, 179, 0.32);
+  --color-cta: #eeefe9;             /* bright CTA for stable contrast */
+  --color-cta-hover: #fafbf5;
+  --color-cta-text: #16191b;
+
+  /* Color — status */
+  --color-success: #97c9b3;
+  --color-success-soft: rgba(151, 201, 179, 0.08);
+  --color-warning: #d8c18f;
+  --color-warning-soft: rgba(216, 193, 143, 0.07);
+  --color-danger: #ecb7a6;
+  --color-danger-soft: rgba(236, 183, 166, 0.05);
+
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  --text-display: clamp(30px, 3.3vw, 46px);
+  --text-h1: 30px;
+  --text-h2: 15px;
+  --text-h3: 14px;
+  --text-body: 14px;
+  --text-small: 13px;
+  --text-label: 12px;
+  --text-caption: 11px;
+  --text-metric: 72px;
+  --leading-body: 1.7;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 22px;
+
+  /* Border & shadow */
+  --border: 1px solid var(--color-border);
+  --border-strong: 1px solid var(--color-border-strong);
+  --shadow: 0 16px 60px rgba(0, 0, 0, 0.25);
+
+  /* Motion (mirrors src/motion/tokens.js) */
+  --dur-fast: 160ms;
+  --dur-normal: 260ms;
+  --dur-slow: 500ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Layout */
+  --header-height: 86px;
+  --content-max: 1440px;
+}

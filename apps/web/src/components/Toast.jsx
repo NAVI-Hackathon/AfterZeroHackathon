@@ -1,9 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { motion } from 'motion/react';
 import Icon from './Icon.jsx';
-import { motionMs } from '../hooks/useMotion.js';
-export default function Toast({ message,onDismiss }) {
-  const [closing,setClosing]=useState(false);
-  useEffect(()=> {const timer=setTimeout(()=>setClosing(true),3200);return ()=>clearTimeout(timer);},[]);
-  useEffect(()=> {if(!closing) return;const timer=setTimeout(onDismiss,motionMs('--motion-fast'));return ()=>clearTimeout(timer);},[closing,onDismiss]);
-  return <div className={`toast ${closing ? 'is-closing' : ''}`} role="status"><span className="toast-check"><Icon name="check" size={16}/></span><p>{message}</p><button type="button" className="icon-button" aria-label="關閉提示" onClick={()=>setClosing(true)}><Icon name="close" size={16}/></button></div>;
+import { transition } from '../motion/tokens.js';
+
+export default function Toast({ message, onDismiss }) {
+  useEffect(() => { const timer = setTimeout(onDismiss, 3200); return () => clearTimeout(timer); }, [message, onDismiss]);
+  return (
+    <motion.div className="toast" role="status"
+      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0, transition: transition.enter }} exit={{ opacity: 0, y: 8, transition: transition.exit }}>
+      <span className="toast-mark"><Icon name="check" size={14} strokeWidth={2.2} /></span>
+      <p>{message}</p>
+      <button type="button" className="icon-button" aria-label="關閉提示" onClick={onDismiss}><Icon name="close" size={15} /></button>
+    </motion.div>
+  );
 }
