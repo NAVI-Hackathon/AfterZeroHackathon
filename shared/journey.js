@@ -10,19 +10,38 @@ const text = z.string().trim().min(1).max(120).nullable();
 export const DocumentAnalysisSchema = z.discriminatedUnion('documentType', [
   z.object({ documentType: z.literal('boarding_pass'), confidence: z.number().finite().min(0).max(1), fields: z.object({ passengerName: text, flightNumber: text, origin: text, destination: text, departureDate: z.iso.date().nullable(), scheduledDeparture: departureTime.optional() }).strict() }).strict(),
   z.object({ documentType: z.literal('delay_certificate'), confidence: z.number().finite().min(0).max(1), fields: z.object({ flightNumber: text, scheduledDeparture: departureTime, actualDeparture: departureTime, departureDate: z.iso.date().nullable().optional(), actualDepartureDate: z.iso.date().nullable().optional(), passengerName: text.optional(), origin: text.optional(), destination: text.optional(), delayMinutes: z.number().int().min(0).max(525600).nullable().optional() }).strict() }).strict(),
+  z.object({ documentType: z.literal('diagnosis_certificate'), confidence: z.number().finite().min(0).max(1), fields: z.object({ patientName: text, hospitalName: text, admissionDate: z.iso.date().nullable(), dischargeDate: z.iso.date().nullable(), diagnosis: text }).strict() }).strict(),
+  z.object({ documentType: z.literal('bank_passbook'), confidence: z.number().finite().min(0).max(1), fields: z.object({ accountHolder: text, bankName: text, accountLast4: z.string().regex(/^\d{4}$/).nullable() }).strict() }).strict(),
   z.object({ documentType: z.literal('unknown'), confidence: z.number().finite().min(0).max(1), fields: z.object({}).strict() }).strict(),
 ]);
 export const RequirementSchema = z.object({ id: z.string(), name: z.string(), description: z.string(), required: z.boolean(), status: z.enum(['missing', 'uploaded', 'verified', 'needs_review']), weight: z.number().int().min(0).max(100) }).strict();
 export const KnowledgeSourceSchema = z.object({ id: z.string(), title: z.string(), section: z.string(), type: z.enum(['prototype_guide', 'prototype_faq']), isMock: z.literal(true), url: z.null() }).strict();
-export const NextActionSchema = z.object({ type: z.enum(['UPLOAD_DOCUMENT', 'PROVIDE_INFORMATION', 'REVIEW_INFORMATION', 'CONTACT_SPECIALIST', 'PROCEED_TO_SERVICE', 'NONE']), target: z.string().nullable(), title: z.string(), description: z.string() }).strict();
-const documentMetadata = z.object({ id: z.string().uuid(), status: z.enum(['uploaded', 'verified', 'needs_review']), matchedRequirements: z.array(z.string()), filename: z.string().max(180), mimeType: z.enum(DOCUMENT_MIME_TYPES), size: z.number().int().positive().max(MAX_DOCUMENT_BYTES), source: z.enum(['demo', 'live']), isMock: z.boolean() }).strict();
+// Where a step lives on the (mock) insurer website. path is always an internal mock-site path;
+// only source.url may point at the real insurer page (opened in a new tab, never fetched).
+export const OfficialSourceSchema = z.object({ url: z.url().regex(/^https:\/\/life\.cardif\.com\.tw\//), title: z.string().min(1).max(80), retrievedAt: z.iso.date() }).strict();
+export const NavigationTargetSchema = z.object({
+  kind: z.enum(['page', 'form', 'faq', 'entry_point']),
+  path: z.string().regex(/^\/(?!\/)[a-z0-9/_-]*$/),
+  anchor: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).nullable(),
+  label: z.string().min(1).max(40),
+  source: OfficialSourceSchema,
+}).strict();
+export const NextActionSchema = z.object({ type: z.enum(['UPLOAD_DOCUMENT', 'PROVIDE_INFORMATION', 'REVIEW_INFORMATION', 'CONTACT_SPECIALIST', 'PROCEED_TO_SERVICE', 'NONE']), target: z.string().nullable(), title: z.string(), description: z.string(), destination: NavigationTargetSchema.optional() }).strict();
+const documentMetadata = z.object({ id: z.string().uuid(), status: z.enum(['uploaded', 'verified', 'needs_review']), matchedRequirements: z.array(z.string()), filename: z.string().max(180), mimeType: z.enum(DOCUMENT_MIME_TYPES), size: z.number().int().positive().max(MAX_DOCUMENT_BYTES), source: z.enum(['demo', 'live']), isMock: z.boolean(), entryMethod: z.enum(['upload', 'sample', 'manual']).optional() }).strict();
 export const DocumentSchema = z.discriminatedUnion('documentType', DocumentAnalysisSchema.options.map(schema => schema.extend(documentMetadata.shape)));
 export const ConversationSchema = z.object({ role: z.enum(['user', 'assistant']), message: z.string().max(MAX_MESSAGE_LENGTH), createdAt: z.iso.datetime() }).strict();
 export const ConsistencyIssueSchema = z.object({ type: z.enum(['FLIGHT_NUMBER_MISMATCH', 'DEPARTURE_DATE_MISMATCH', 'ORIGIN_MISMATCH', 'DESTINATION_MISMATCH', 'PASSENGER_NAME_MISMATCH']), severity: z.literal('high'), message: z.string(), documentIds: z.array(z.string().uuid()) }).strict();
+export const ClaimChannelSchema = z.object({ id: z.enum(['hospital_upload', 'union_chain', 'mail']), name: z.string(), available: z.boolean(), notes: z.array(z.string()), destination: NavigationTargetSchema }).strict();
+export const ClaimContextSchema = z.object({
+  hospital: z.object({ mentioned: z.string(), matchedName: z.string().nullable(), partner: z.boolean() }).nullable(),
+  channels: z.array(ClaimChannelSchema),
+  reminders: z.array(z.string()),
+}).strict();
 export const ServiceJourneySchema = z.object({
   id: z.string().uuid(), serviceType: z.enum(serviceTypes), title: z.string(), summary: z.string().max(300), confidence: z.number().min(0).max(1), currentStage: z.enum(Object.values(JOURNEY_STATES)), readiness: z.number().int().min(0).max(100),
   extractedData: IntentDataSchema.shape.extractedData, requirements: z.array(RequirementSchema), documents: z.array(DocumentSchema), conversation: z.array(ConversationSchema), nextAction: NextActionSchema, sources: z.array(KnowledgeSourceSchema),
   consistencyIssues: z.array(ConsistencyIssueSchema).optional(), confirmed: z.boolean(), supported: z.boolean(), provider: z.enum(['demo', 'live', 'provided']), createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(), disclaimer: z.string(),
+  claimContext: ClaimContextSchema.optional(), officialSources: z.array(OfficialSourceSchema).optional(),
 }).strict();
 export const CreateJourneyRequestSchema = z.object({ message: z.string().trim().min(1).max(MAX_MESSAGE_LENGTH), intentResult: IntentDataSchema.optional() }).strict();
 export const ReviewRequestSchema = z.object({ confirmed: z.literal(true) }).strict();

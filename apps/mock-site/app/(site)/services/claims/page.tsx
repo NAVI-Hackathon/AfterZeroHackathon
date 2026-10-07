@@ -23,8 +23,8 @@ export default function ClaimsPage() {
         <ServiceDetail service={byMail}>
           <h3 className="mt-6 font-bold text-ink">理賠申請注意事項</h3>
           <ol data-tour-id="claim-general-rules" className="mt-2 list-decimal space-y-1 pl-5 text-[15px] leading-relaxed">
-            {seed.claim_general_rules.map((rule) => (
-              <li key={rule}>{rule}</li>
+            {seed.claim_general_rules.map((rule, index) => (
+              <li key={rule} data-tour-id={`claim-rule-${index + 1}`}>{rule}</li>
             ))}
           </ol>
         </ServiceDetail>
@@ -44,8 +44,8 @@ export default function ClaimsPage() {
               </tr>
             </thead>
             <tbody>
-              {requirements.map(([type, documents]) => (
-                <tr key={type} className="border-b border-neutral-200 align-top">
+              {requirements.map(([type, documents], index) => (
+                <tr key={type} data-tour-id={`claim-doc-${index + 1}`} className="border-b border-neutral-200 align-top">
                   <th scope="row" className="px-3 py-3 text-left font-medium">{type}</th>
                   <td className="px-3 py-3">{documents.join("、")}</td>
                 </tr>

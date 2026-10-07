@@ -20,10 +20,16 @@ const paths = {
   trash:'M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7',
   download:'M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4',
   book:'M12 5C8 2 3 3 3 3v16s5-1 9 2c4-3 9-2 9-2V3s-5-1-9 2Zm0 0v16',
+  edit:'M4 20h4L19 9l-4-4L4 16v4Zm9.5-13.5 4 4',
+  external:'M14 5h5v5M19 5l-8 8M17 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h4',
+  alert:'M12 9v4.5M12 17v.01M10.3 4.3 2.8 17.5A2 2 0 0 0 4.5 20.5h15a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z',
+  chat:'M5 5.5h14v10H10l-4 3.5v-3.5H5v-10Z',
+  medical:'M10 4h4v6h6v4h-6v6h-4v-6H4v-4h6V4Z',
+  bank:'M3 10h18M5 10v8m4.7-8v8m4.6-8v8M19 10v8M3 20h18M12 3l9 5H3l9-5Z',
 };
 
-export default function Icon({ name, size=20, className='' }) {
-  return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] || paths.spark} /></svg>;
+export default function Icon({ name, size=20, className='', strokeWidth=1.6 }) {
+  return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] || paths.spark} /></svg>;
 }
 
 export function Mark({ small=false }) {

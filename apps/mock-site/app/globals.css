@@ -15,3 +15,30 @@ body {
   background: #ffffff;
   color: var(--color-ink);
 }
+
+/* NAVI navigation spotlight (data-tour-id target) */
+.navi-spotlight {
+  position: relative;
+  outline: 2px solid #97c9b3;
+  outline-offset: 4px;
+  border-radius: 6px;
+  animation: navi-spotlight 2.8s cubic-bezier(0.2, 0, 0, 1) both;
+}
+@keyframes navi-spotlight {
+  0% { box-shadow: 0 0 0 0 rgba(151, 201, 179, 0.55); }
+  25% { box-shadow: 0 0 0 10px rgba(151, 201, 179, 0.18); }
+  80% { box-shadow: 0 0 0 10px rgba(151, 201, 179, 0.12); outline-color: #97c9b3; }
+  100% { box-shadow: 0 0 0 0 rgba(151, 201, 179, 0); outline-color: transparent; }
+}
+.navi-spotlight:not(tr)[data-navi-label]::after {
+  content: "NAVI・" attr(data-navi-label);
+  position: absolute; z-index: 30; left: 0; top: -2.6rem;
+  padding: 4px 10px; border-radius: 999px;
+  background: #0a0b0d; color: #eeefe9; font-size: 12px; white-space: nowrap;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  animation: navi-label 2.8s ease both;
+}
+@keyframes navi-label { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .navi-spotlight, .navi-spotlight::after { animation-duration: 0.001ms; }
+}

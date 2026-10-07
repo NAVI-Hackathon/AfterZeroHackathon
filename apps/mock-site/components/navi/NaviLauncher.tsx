@@ -1,0 +1,103 @@
+"use client";
+
+/**
+ * NAVI 浮動元件：右下角按鈕 → 側邊面板（手機全螢幕）以 iframe 載入 NAVI 嵌入模式。
+ * 只接受來自 NEXT_PUBLIC_NAVI_EMBED_URL 同源、且來自該 iframe 的 postMessage。
+ */
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  NaviMessageSchema, hostMessage, isAllowedOrigin, originOf, readMessage,
+} from "../../../../shared/embed.js";
+
+const EMBED_URL = process.env.NEXT_PUBLIC_NAVI_EMBED_URL ?? "";
+const NAVI_ORIGIN = originOf(EMBED_URL);
+
+export type NaviDestination = { kind: string; path: string; anchor: string | null; label: string };
+
+export function NaviLauncher({ onNavigate }: { onNavigate?: (destination: NaviDestination) => void }) {
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const frame = useRef<HTMLIFrameElement>(null);
+  const launcher = useRef<HTMLButtonElement>(null);
+
+  const sayHello = useCallback(() => {
+    if (NAVI_ORIGIN) frame.current?.contentWindow?.postMessage(hostMessage("host:hello"), NAVI_ORIGIN);
+  }, []);
+
+  useEffect(() => {
+    if (!NAVI_ORIGIN) return;
+    const allowedOrigins = [NAVI_ORIGIN];
+    const onMessage = (event: MessageEvent) => {
+      if (!isAllowedOrigin(event.origin, allowedOrigins)) return;
+      const message = readMessage(event, { allowedOrigins, expectedSource: frame.current?.contentWindow ?? null, schema: NaviMessageSchema });
+      if (!message) return;
+      if (message.type === "navi:ready") { setConnected(true); sayHello(); }
+      if (message.type === "navi:close") { setOpen(false); launcher.current?.focus(); }
+      if (message.type === "navi:navigate") {
+        onNavigate?.(message.destination);
+        // On phones the panel covers the page; close it so the highlighted target is visible.
+        if (window.matchMedia("(max-width: 639.98px)").matches) setOpen(false);
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [onNavigate, sayHello]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  if (!NAVI_ORIGIN) return null;
+
+  return (
+    <>
+      {!open && (
+        <button
+          ref={launcher}
+          type="button"
+          data-tour-id="navi-launcher"
+          aria-expanded={false}
+          aria-controls="navi-panel"
+          onClick={() => { setMounted(true); setOpen(true); }}
+          className="fixed bottom-5 right-5 z-50 flex items-center gap-2.5 rounded-full border border-white/10 bg-[#0a0b0d] py-2.5 pl-2.5 pr-5 text-sm font-medium text-[#eeefe9] shadow-[0_12px_40px_rgba(0,0,0,0.28)] transition-transform hover:-translate-y-0.5"
+        >
+          <span aria-hidden className="grid size-8 place-items-center rounded-full bg-[#eeefe9]">
+            <svg viewBox="0 0 40 40" className="size-5"><path d="M11 29V20h9v-9h9m-5 0h5v5" fill="none" stroke="#0a0b0d" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </span>
+          <span className="flex flex-col items-start leading-tight">
+            <span className="tracking-[0.12em]">NAVI</span>
+            <span className="text-[11px] font-normal text-[#97c9b3]">告訴我發生了什麼</span>
+          </span>
+        </button>
+      )}
+
+      {mounted && (
+        <section
+          id="navi-panel"
+          role="dialog"
+          aria-label="NAVI 服務導航助手"
+          hidden={!open}
+          className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#0a0b0d] shadow-[0_20px_70px_rgba(0,0,0,0.35)] sm:inset-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[420px] sm:rounded-2xl sm:border sm:border-white/10"
+        >
+          {!connected && (
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 text-xs text-[#90989d]">
+              <span>正在連線 NAVI…</span>
+              <button type="button" onClick={() => setOpen(false)} className="rounded px-2 py-1 text-[#eeefe9] hover:bg-white/10" aria-label="關閉 NAVI">關閉</button>
+            </div>
+          )}
+          <iframe
+            ref={frame}
+            src={EMBED_URL}
+            title="NAVI 服務導航助手"
+            onLoad={sayHello}
+            className="w-full flex-1 border-0 bg-[#0a0b0d]"
+          />
+        </section>
+      )}
+    </>
+  );
+}

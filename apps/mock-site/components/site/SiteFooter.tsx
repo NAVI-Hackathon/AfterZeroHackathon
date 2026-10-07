@@ -23,6 +23,7 @@ export function SiteFooter({
           <li><Link href={SITE_ROUTES.forms} className="hover:text-white">常用表單下載</Link></li>
           <li><Link href={SITE_ROUTES.claims} className="hover:text-white">理賠程序介紹</Link></li>
           <li><Link href={SITE_ROUTES.online} className="hover:text-white">網路保險服務</Link></li>
+          <li><Link href={SITE_ROUTES.faq} data-tour-id="footer-faq" className="hover:text-white">常見問題</Link></li>
         </ul>
         <p className="leading-relaxed">
           本站內容整理自法國巴黎人壽官網公開資訊（擷取日期 {retrievedAt}），僅供競賽展示，

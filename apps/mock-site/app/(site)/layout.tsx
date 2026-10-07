@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { NaviHost } from "@/components/navi/NaviHost";
 import { toSitePath } from "@/components/site/routes";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader, type NavGroup } from "@/components/site/SiteHeader";
@@ -28,6 +29,7 @@ export default function SiteLayout({ children }: { children: ReactNode }) {
         address={seed.contacts.address}
         retrievedAt={retrievedAt}
       />
+      <NaviHost />
     </>
   );
 }
