@@ -40,6 +40,8 @@ npm run dev:navi
 主產品 URL：**http://127.0.0.1:5173/**。Backend：http://127.0.0.1:3001/api/health。
 `npm run dev` 仍是原本 NAVI 的啟動捷徑；`dev:web`、`dev:api` 可分別啟動。整合啟動的 API 不監看檔案，修改 Backend 或 `.env` 後請重新啟動；`dev:api` 則保留開發監看。
 
+**Developer B Backend Demo Phase 1**：`AI_MODE=demo npm run dev:navi` 可在沒有 Gemini Key 時啟動明確示範 provider；`AI_MODE=demo npm run dev:all` 同時啟動兩站。預設 `live` 保留原入口行為。新 Journey API 已提供，但工作區尚未接入 server-owned Journey，UI 繼續使用原 Mock 文件流程。契約、threshold、API 與限制見 [Backend Demo Phase 1](docs/backend-demo-phase-1.md)。
+
 Backend 設定集中於 `apps/api/src/config/env.js`，範例在 `apps/api/.env.example`；Gemini 模型與 threshold 沿用現有設定。未設定 key 時 health 正常、分析 API 明確回覆未配置，不會冒充 AI 成功。
 
 前端設定在 `apps/web/.env.example`；`/api` 由 Vite proxy 連到 3001，production 需部署同 origin reverse proxy 或設定 `VITE_API_BASE_URL`。Key 不可放進 `VITE_*`。
@@ -128,7 +130,7 @@ npm run test:integration  # 真正 Gemini 測試，需要 apps/api/.env
 VITE_ENABLE_DEMO_FALLBACK=true
 ```
 
-重新啟動 Web（或重新 Build）後生效。只有 API failure 時且只支援班機延誤；畫面會顯示 **「示範備援判讀 · 本次未使用 AI 分析」**。有效的 Unknown／低信心結果不會被替換。預設與 production 都為關閉，Backend 不提供隱藏 mock 模式。
+重新啟動 Web（或重新 Build）後生效。只有 API failure 時且只支援班機延誤；畫面會顯示 **「示範備援判讀 · 本次未使用 AI 分析」**。有效的 Unknown／低信心結果不會被替換。預設與 production 都為關閉，Backend 的明確 `AI_MODE=demo` 是另一種示範方式；不會因 live 失敗而自動切換。
 
 ## API 與架構
 

@@ -1,0 +1,16 @@
+{
+  "flight_delay": {
+    "title": "班機延誤",
+    "isMock": true,
+    "sourceIds": ["claim-guide", "flight-faq"],
+    "disclaimer": "根據目前提供的資訊，這項服務可能符合你的情況，最終仍需依實際條款與審核結果為準。準備度僅代表示範資料完整度。",
+    "requirements": [
+      {"id":"incident","name":"事件資訊","description":"已描述發生的情況。","required":true},
+      {"id":"service","name":"服務比對","description":"已辨識班機延誤需求，不代表理賠資格。","required":true},
+      {"id":"travel","name":"旅行資訊","description":"登機證上的旅客、航班、航線與日期完整。","required":true},
+      {"id":"boarding_pass","name":"登機證","description":"用於確認旅客與航班資訊。","required":true},
+      {"id":"delay_certificate","name":"航空公司延誤證明","description":"用於確認原定與實際起飛時間。","required":true},
+      {"id":"confirmation","name":"資料確認","description":"確認已備齊的示範資料。","required":true}
+    ]
+  }
+}

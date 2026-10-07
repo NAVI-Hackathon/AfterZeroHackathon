@@ -1,5 +1,5 @@
 export class ApiError extends Error {
-  constructor(code, message, status = 502) { super(message); this.code = code; this.status = status; }
+  constructor(code, message, status = 502, retryable = status >= 500) { super(message); this.code = code; this.status = status; this.retryable = retryable; }
 }
 export function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
@@ -10,5 +10,5 @@ export function errorHandler(error, req, res, next) {
   const status = known ? error.status : malformed ? 400 : tooLarge ? 413 : 500;
   // Log metadata only: no request text, provider bodies, environment values or credentials.
   if (status >= 500) console.warn(JSON.stringify({ event: 'api_error', code, status }));
-  res.status(status).json({ success: false, error: { code, message: known ? error.message : malformed ? '請提供有效的 JSON 資料。' : tooLarge ? '輸入資料過大。' : '目前暫時無法處理，請稍後再試。' } });
+  res.status(status).json({ success: false, error: { code, message: known ? error.message : malformed ? '請提供有效的 JSON 資料。' : tooLarge ? '輸入資料過大。' : '目前暫時無法處理，請稍後再試。', retryable: known ? error.retryable : status >= 500 } });
 }

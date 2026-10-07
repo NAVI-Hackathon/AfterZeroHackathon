@@ -120,3 +120,17 @@ After confirming Phase 2A and its real-provider QA, add a separate bounded docum
 `apps/mock-site` runs the collaborator's Next.js 16 / Tailwind mock insurance website on 127.0.0.1:3000. It owns its router, public assets, styles, PostCSS and TypeScript config. Its eight pages retain local seed validation, hash tabs and data-tour-id hooks. It imports root `data` and `lib/contracts` through explicit aliases; those original contracts are retained independently of NAVI's `shared/intelligence.js`.
 
 NAVI's `apps/web` (5173) and `apps/api` (3001) remain unchanged in responsibility. `/api` is only proxied by NAVI Vite. Root `npm run dev:all` starts three separate processes, and each site builds separately. No embedded NAVI assistant, cross-site case transport or external application submission was added. The demonstration switches browser tabs manually. The original SPEC describes a broader planned Next/OpenAI/Turso product; its scaffolding is preserved, not claimed as implemented.
+
+
+## Developer B Backend Demo Phase 1
+
+新增 server-owned ServiceJourney API：
+
+```text
+HTTP API → JourneyService → injected InMemoryJourneyRepository
+                       ↘ deterministic workflow / readiness / next action
+                       ↘ AIProvider (explicit demo / existing live intent)
+                       ↘ KnowledgeService (prototype JSON only)
+```
+
+`shared/journey.js` 是新增 Journey 契約；既有 `shared/intelligence.js` 保留。Demo documents 為 fixture，不是 Phase 2B 的真實文件辨識。原前端 API client 仍只接 intent，現有工作區與 persistence 仍由原純 frontend workflow 管理；server Journey 的 adapter 由 Developer A 後續串接，尚未宣稱已接上 UI。詳細 endpoints、confidence 邊界與 QA 見 [Backend Demo Phase 1](backend-demo-phase-1.md)。
