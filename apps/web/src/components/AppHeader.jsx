@@ -45,3 +45,23 @@ export default function AppHeader({ mode, view, hasJourney, busy, onHome, onResu
     </header>
   );
 }
+
+/** Compact header for NAVI inside a host website's side panel. */
+export function EmbedHeader({ mode, view, hasJourney, busy, onHome, onResume, onReset, onClose }) {
+  return (
+    <header className="embed-header">
+      <button type="button" className="brand" onClick={onHome} disabled={busy} aria-label="回到 NAVI 首頁">
+        <Mark />
+        <span className="wordmark">NAVI<small>服務導航助手</small></span>
+      </button>
+      {mode === 'demo' && <span className="mode-badge" title="使用示範資料，不連線 AI">示範</span>}
+      <div className="embed-header-actions">
+        {hasJourney && view === 'landing' && (
+          <button type="button" className="icon-button" disabled={busy} onClick={onResume} aria-label="回到我的旅程"><Icon name="route" size={17} /></button>
+        )}
+        <button type="button" className="icon-button" onClick={onReset} aria-label="重新開始"><Icon name="reset" size={17} /></button>
+        {onClose && <button type="button" className="icon-button" onClick={onClose} aria-label="關閉 NAVI"><Icon name="close" size={18} /></button>}
+      </div>
+    </header>
+  );
+}

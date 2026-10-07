@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, LayoutGroup, MotionConfig, useReducedMotion } from 'motion/react';
-import AppHeader from './components/AppHeader.jsx';
+import AppHeader, { EmbedHeader } from './components/AppHeader.jsx';
 import Landing from './components/landing/Landing.jsx';
 import Workspace from './components/workspace/Workspace.jsx';
 import Toast from './components/Toast.jsx';
 import { HandoffDialog, ProceedDialog, ReviewDialog, ServiceDialog } from './components/dialogs/JourneyDialogs.jsx';
-import { createApiAdapter, createMockAdapter, isDemoPath } from './services/adapters.js';
+import { createApiAdapter, createMockAdapter, isEmbedPath, resolveMode } from './services/adapters.js';
+import { useHostBridge } from './hooks/useHostBridge.js';
+import { naviMessage } from '../../../shared/embed.js';
 import { analysisErrors } from './services/intelligence.js';
 import { serviceLabel } from './domain/intelligence.js';
 import { documentSpecs } from './mocks/hospitalClaim.js';
 
-const mode = isDemoPath(location.pathname) ? 'demo' : 'live';
+const embedded = isEmbedPath(location.pathname);
+const mode = resolveMode(location);
 
 const errorCopy = {
   ...analysisErrors,
@@ -53,6 +56,7 @@ export default function App() {
   const [failNext, setFailNext] = useState(false);
   const [landingKey, setLandingKey] = useState(0);
   const systemReduced = useReducedMotion();
+  const host = useHostBridge(embedded);
   const reduced = reduceMotion || systemReduced;
 
   const analysisCtl = useRef(null);
@@ -60,6 +64,7 @@ export default function App() {
   const fileInputs = useRef({});
   useEffect(() => { snapshotRef.current = snapshot; }, [snapshot]);
   useEffect(() => { document.documentElement.dataset.reducedMotion = String(reduced); }, [reduced]);
+  useEffect(() => { document.documentElement.dataset.embedded = String(embedded); }, []);
 
   useEffect(() => {
     const onPop = () => {
@@ -83,7 +88,7 @@ export default function App() {
     window.scrollTo(0, 0);
   }
   function goLanding() {
-    history.pushState(null, '', location.pathname);
+    history.pushState(null, '', location.pathname + location.search);
     setView('landing');
     window.scrollTo(0, 0);
   }
@@ -203,13 +208,21 @@ export default function App() {
     <MotionConfig reducedMotion={reduceMotion ? 'always' : 'user'}>
       <div className="app-shell">
         <a className="skip-link" href="#main-content">跳至主要內容</a>
-        <AppHeader
-          mode={mode} view={view} hasJourney={Boolean(snapshot)} busy={analysisPhase !== null || Boolean(busyType)}
-          onHome={goLanding} onResume={goWorkspace} onReset={reset}
-          reduceMotion={reduceMotion} onReduceMotion={setReduceMotion}
-          failNext={failNext} onFailNext={value => { setFailNext(value); service.setFailNextDocument(value); }}
-        />
-        {mode === 'demo' && (
+        {embedded ? (
+          <EmbedHeader
+            mode={mode} view={view} hasJourney={Boolean(snapshot)} busy={analysisPhase !== null || Boolean(busyType)}
+            onHome={goLanding} onResume={goWorkspace} onReset={reset}
+            onClose={host.connected ? () => host.send(naviMessage('navi:close')) : null}
+          />
+        ) : (
+          <AppHeader
+            mode={mode} view={view} hasJourney={Boolean(snapshot)} busy={analysisPhase !== null || Boolean(busyType)}
+            onHome={goLanding} onResume={goWorkspace} onReset={reset}
+            reduceMotion={reduceMotion} onReduceMotion={setReduceMotion}
+            failNext={failNext} onFailNext={value => { setFailNext(value); service.setFailNextDocument(value); }}
+          />
+        )}
+        {mode === 'demo' && !embedded && (
           <p className="demo-banner" role="note">示範模式：使用示範資料展示完整流程，不連線 AI，也不會送出任何申請。</p>
         )}
 

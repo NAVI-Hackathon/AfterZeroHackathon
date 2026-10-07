@@ -29,3 +29,13 @@ export function createApiAdapter({ storage = safeSessionStorage(), documentDelay
 export function isDemoPath(pathname) {
   return /^\/demo\/?$/.test(pathname);
 }
+
+export function isEmbedPath(pathname) {
+  return /^\/embed\/?$/.test(pathname);
+}
+
+/** /demo → demo; /embed?mode=demo → demo; everything else uses the real API. */
+export function resolveMode(location) {
+  if (isEmbedPath(location.pathname)) return new URLSearchParams(location.search).get('mode') === 'demo' ? 'demo' : 'live';
+  return isDemoPath(location.pathname) ? 'demo' : 'live';
+}

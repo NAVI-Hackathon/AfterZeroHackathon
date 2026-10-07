@@ -482,3 +482,19 @@ button:active:not(:disabled) { transform: scale(0.98); }
 [data-reduced-motion="true"] *, [data-reduced-motion="true"] *::before, [data-reduced-motion="true"] *::after {
   animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important;
 }
+
+/* ───────── Embedded in a host website (iframe side panel) ───────── */
+.embed-header { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 12px 0 16px; background: rgba(10, 11, 13, 0.92); border-bottom: var(--border); backdrop-filter: blur(10px); }
+.embed-header .brand-mark { width: 24px; height: 24px; }
+.embed-header .wordmark { font-size: 17px; letter-spacing: 1.2px; }
+.embed-header .wordmark small { font-size: 9px; letter-spacing: 0.02em; }
+.embed-header-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+[data-embedded="true"] .landing { padding: 0 18px; }
+[data-embedded="true"] .hero { padding: 28px 0 12px; }
+[data-embedded="true"] .hero h1 { margin: 14px 0 12px; font-size: 26px; letter-spacing: -0.8px; }
+[data-embedded="true"] .hero-subtitle { font-size: 12px; }
+[data-embedded="true"] .composer { margin-top: 20px; }
+[data-embedded="true"] .composer textarea { height: 104px; }
+[data-embedded="true"] .how-it-works, [data-embedded="true"] .workspace-footer { display: none; }
+[data-embedded="true"] .workspace { padding: 18px 16px 24px; }
+[data-embedded="true"] .mobile-tabs { top: 64px; }
