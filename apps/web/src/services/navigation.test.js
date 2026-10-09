@@ -1,12 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readdirSync } from 'node:fs';
 import { createMockAdapter } from './adapters.js';
 import { DEMO_STORY } from '../mocks/hospitalClaim.js';
 import { NavigationTargetSchema } from '../../../../shared/journey.js';
 import raw from '../../../../data/cardif_seed_data.json' with { type: 'json' };
 
-// Paths that exist in apps/mock-site (app/(site)/…). Keep in sync with components/site/routes.ts.
-const MOCK_SITE_PATHS = new Set(['/', '/services', '/services/forms', '/services/policy-change', '/services/policy-loan', '/services/claims', '/services/online', '/glossary', '/faq']);
+// Paths that exist in apps/mock-site, derived from its app/ directory: route groups "(…)" and private "_…" folders add no segment.
+const mockSiteApp = new URL('../../../mock-site/app/', import.meta.url);
+const MOCK_SITE_PATHS = new Set(readdirSync(mockSiteApp, { recursive: true })
+  .filter(file => /(^|[\\/])page\.tsx$/.test(file))
+  .map(file => '/' + file.split(/[\\/]/).slice(0, -1).filter(segment => !/^\(.*\)$/.test(segment)).join('/'))
+  .filter(path => !path.split('/').some(segment => segment.startsWith('_'))));
 
 function memoryStorage() {
   const map = new Map();
