@@ -24,7 +24,7 @@ export const DOCUMENT_TYPES = Object.keys(documentSpecs);
 export const stages = ['事件理解', '醫院與管道', '文件準備', '資料確認', '前往申請'];
 
 export const assistantQuestions = [
-  { id: 'duration', question: '理賠要多久？', match: /多久|時間|幾天/ },
-  { id: 'hospital', question: '醫起通是什麼？', match: /醫起通|醫院上傳|合作醫院/ },
-  { id: 'originals', question: '線上申請還要寄正本嗎？', match: /正本|寄回|聯盟鏈/ },
+  { id: 'duration', question: '理賠要多久？' },
+  { id: 'hospital', question: '醫起通是什麼？' },
+  { id: 'originals', question: '線上申請還要寄正本嗎？' },
 ];

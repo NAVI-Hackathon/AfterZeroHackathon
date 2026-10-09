@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import Icon from '../Icon.jsx';
+import AnswerCard from '../knowledge/AnswerCard.jsx';
 import { assistantQuestions } from '../../mocks/hospitalClaim.js';
-import { claimByMail, claimFaq, faqDestination, hospitalUpload, officialSource, reminders, unionChain } from '../../content/cardifData.js';
-import { claimDestinations } from '../../services/journeyEngine.js';
+import { retrievedAt } from '../../content/cardifData.js';
+import { searchKnowledge } from '../../domain/knowledge.js';
 import { crossfade, fadeUp, staggerChildren, transition } from '../../motion/tokens.js';
 
 function suggestionFor(snapshot) {
@@ -17,16 +18,12 @@ function suggestionFor(snapshot) {
   return journey.nextAction.description;
 }
 
-// Answers are quoted from data/cardif_seed_data.json; NAVI never writes its own policy text.
+// Answers are quoted from data/cardif_seed_data.json (domain/knowledge.js); NAVI never writes its own policy text.
 function answerFor(question) {
-  const entry = assistantQuestions.find(item => item.match.test(question));
-  if (entry?.id === 'duration') {
-    const faq = claimFaq.find(f => /多久/.test(f.q));
-    if (faq) return { text: faq.a, source: officialSource(faq.source), destination: faqDestination(faq) };
-  }
-  if (entry?.id === 'hospital') return { text: `${hospitalUpload.name}：${hospitalUpload.notes.join('；')}。`, source: officialSource(hospitalUpload.url), destination: claimDestinations.hospitalUpload };
-  if (entry?.id === 'originals') return { text: `${unionChain.name}：${reminders.unionReturnOriginals}；${reminders.unionLargeAmount}。`, source: officialSource(unionChain.url), destination: claimDestinations.unionChain };
-  return { text: '這個問題目前沒有可引用的官網資料，建議轉由專員確認。', source: null };
+  const result = searchKnowledge(question, { limit: 2 });
+  if (result.status === 'answered') return { entries: result.results, highlights: result.highlights };
+  if (result.status === 'out_of_scope') return { text: `NAVI 不提供投保建議，也無法判斷能否理賠或理賠金額。請洽客服專線 ${result.hotline}。` };
+  return { text: `官網資料中沒有找到相關說明，建議換個說法，或洽客服專線 ${result.hotline}。` };
 }
 
 export default function AssistantPanel({ snapshot, onHandoff, onNavigate }) {
@@ -109,35 +106,30 @@ export default function AssistantPanel({ snapshot, onHandoff, onNavigate }) {
           </motion.section>
         )}
 
-        {isHospital && (
-          <motion.section className="ask" variants={fadeUp} aria-labelledby="ask-title">
-            <h3 id="ask-title" className="section-label">想進一步了解</h3>
-            <div className="ask-log" aria-live="polite">
-              {answers.map((a, i) => (
-                <motion.div key={i} className="qa" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: transition.enter }}>
-                  <p className="qa-q">{a.q}</p>
-                  <p className="qa-a">{a.text}</p>
-                  {a.destination && onNavigate && (
-                    <button type="button" className="link-button navigate-link" onClick={() => onNavigate(a.destination)}><Icon name="external" size={13} />在官網查看：{a.destination.label}</button>
-                  )}
-                  {a.source && <p className="qa-source"><Icon name="book" size={12} />依據：法國巴黎人壽官網・{a.source.title}（擷取 {a.source.retrievedAt}）</p>}
-                </motion.div>
-              ))}
-              {thinking && <p className="qa-thinking" role="status"><span className="dots" aria-hidden="true"><i /><i /><i /></span>正在整理說明</p>}
-            </div>
-            <div className="ask-suggestions">
-              {assistantQuestions.filter(item => !answers.some(a => a.q === item.question)).map(item => (
-                <button key={item.id} type="button" className="chip" disabled={thinking} onClick={() => ask(item.question)}>{item.question}</button>
-              ))}
-            </div>
-            <form className="ask-form" onSubmit={e => { e.preventDefault(); ask(question); }}>
-              <label className="visually-hidden" htmlFor="ask-input">詢問 NAVI</label>
-              <input id="ask-input" value={question} maxLength={300} placeholder="詢問文件或申請方式…" onChange={e => setQuestion(e.target.value)} />
-              <button type="submit" className="icon-button icon-button-filled" aria-label="送出問題" disabled={!question.trim() || thinking}><Icon name="arrow" size={16} /></button>
-            </form>
-            <p className="ask-note">回答引用自法國巴黎人壽官網公開資料（擷取 {officialSource(claimByMail.url).retrievedAt}）。</p>
-          </motion.section>
-        )}
+        <motion.section className="ask" variants={fadeUp} aria-labelledby="ask-title">
+          <h3 id="ask-title" className="section-label">想進一步了解</h3>
+          <div className="ask-log" aria-live="polite">
+            {answers.map((a, i) => (
+              <motion.div key={i} className="qa" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: transition.enter }}>
+                <p className="qa-q">{a.q}</p>
+                {a.text && <p className="qa-a">{a.text}</p>}
+                {a.entries?.map(entry => <AnswerCard key={entry.id} entry={entry} onNavigate={onNavigate} compact highlights={a.highlights[entry.id]} headingLevel={4} />)}
+              </motion.div>
+            ))}
+            {thinking && <p className="qa-thinking" role="status"><span className="dots" aria-hidden="true"><i /><i /><i /></span>正在整理說明</p>}
+          </div>
+          <div className="ask-suggestions">
+            {isHospital && assistantQuestions.filter(item => !answers.some(a => a.q === item.question)).map(item => (
+              <button key={item.id} type="button" className="chip" disabled={thinking} onClick={() => ask(item.question)}>{item.question}</button>
+            ))}
+          </div>
+          <form className="ask-form" onSubmit={e => { e.preventDefault(); ask(question); }}>
+            <label className="visually-hidden" htmlFor="ask-input">詢問 NAVI</label>
+            <input id="ask-input" value={question} maxLength={300} placeholder="詢問文件或申請方式…" onChange={e => setQuestion(e.target.value)} />
+            <button type="submit" className="icon-button icon-button-filled" aria-label="送出問題" disabled={!question.trim() || thinking}><Icon name="arrow" size={16} /></button>
+          </form>
+          <p className="ask-note">回答引用自法國巴黎人壽官網公開資料（擷取 {retrievedAt}）。</p>
+        </motion.section>
       </motion.div>
     </aside>
   );
