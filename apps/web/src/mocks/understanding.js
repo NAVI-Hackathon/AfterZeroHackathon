@@ -9,10 +9,6 @@ const scenarios = [
     data: { intent: 'service_request', serviceType: 'hospitalization_claim', confidence: 0.94, summary: '你住院後想申請醫療理賠。先確認醫院是否可用醫起通，再整理需要的文件。' },
   },
   {
-    match: text => /(?:car|vehicle|車)/i.test(text) && /(?:accident|crash|車禍|事故|擦撞|追撞)/i.test(text),
-    data: { intent: 'service_request', serviceType: 'vehicle_accident', confidence: 0.9, summary: '你描述的是車輛事故。先整理事故資訊，再由專員確認適用的保障與處理方式。' },
-  },
-  {
     match: text => /(?:payment|付款|繳費|扣款|信用卡|轉帳)/i.test(text) && /(?:change|update|更改|變更|修改|換|改)/i.test(text),
     data: { intent: 'service_request', serviceType: 'payment_method_change', confidence: 0.92, summary: '你想更改保單的繳費方式。先確認變更類型，再依官網說明準備文件。' },
   },

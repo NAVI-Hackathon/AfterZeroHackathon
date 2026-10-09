@@ -79,10 +79,10 @@ test('removing a document withdraws readiness and confirmation', async () => {
   assert.equal(snapshot.journey.confirmed, false);
 });
 
-test('car accident and payment change open a basic journey; vague input does not', async () => {
+test('payment change opens a basic journey; car accidents (not a BNP Paribas Cardif life service) and vague input do not', async () => {
   const car = await fast(memoryStorage()).analyze('我今天開車發生擦撞，想知道要準備什麼');
-  assert.equal(car.snapshot.journey.serviceType, 'vehicle_accident');
-  assert.equal(car.snapshot.journey.nextAction.type, 'CONTACT_SPECIALIST');
+  assert.equal(car.snapshot, null);
+  assert.equal(car.understanding.meta.outcome, 'clarification');
   const payment = await fast(memoryStorage()).analyze('我想更改保單的繳費方式');
   assert.equal(payment.snapshot.journey.nextAction.destination.path, '/services/policy-change');
   const vague = await fast(memoryStorage()).analyze('你好');

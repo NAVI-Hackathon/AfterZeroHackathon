@@ -6,7 +6,7 @@ import { stayDays, stayText } from '../../content/format.js';
 import { CheckDraw } from '../../motion/primitives.jsx';
 import { fadeUp, staggerChildren, transition } from '../../motion/tokens.js';
 
-const serviceIcons = { hospital: 'medical', vehicle_accident: 'car', payment_method_change: 'card', unknown: 'headset' };
+const serviceIcons = { hospital: 'medical', payment_method_change: 'card', unknown: 'headset' };
 
 /** Index of the step currently in progress, derived from the contract's currentStage. */
 export function activeStepIndex(journey, kind) {

@@ -2,7 +2,7 @@ import { UnderstandingSchema } from '../../../../shared/intelligence.js';
 import { mockUnderstanding } from '../mocks/understanding.js';
 
 export const intelligenceLabels = {
-  hospitalization_claim: '住院醫療理賠', vehicle_accident: '車輛事故', payment_method_change: '更改繳費方式',
+  hospitalization_claim: '住院醫療理賠', payment_method_change: '更改繳費方式',
   policy_change: '保單變更', policy_information: '保單資訊', unknown: '需要補充說明',
 };
 export const serviceLabel = serviceType => intelligenceLabels[serviceType] ?? '其他服務';

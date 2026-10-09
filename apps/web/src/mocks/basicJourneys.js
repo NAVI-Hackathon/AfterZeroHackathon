@@ -6,17 +6,6 @@ import { officialSource, paymentChange } from '../content/cardifData.js';
 const requirement = (id, name, description, required = true) => ({ id, name, description, required, status: 'missing', weight: 0 });
 
 export const basicJourneys = {
-  vehicle_accident: {
-    title: '車輛事故',
-    stages: ['事件理解', '服務辨識', '事故資訊', '專員確認', '前往服務'],
-    requirements: [
-      requirement('incident_detail', '事故日期、地點與經過', '先記下事故發生的時間、地點與相關人員。'),
-      requirement('incident_photos', '現場與車損照片', '拍下現場與車輛受損情形。'),
-      requirement('police_report', '警方事故紀錄', '若有報案，保留事故紀錄。', false),
-    ],
-    nextAction: { type: 'CONTACT_SPECIALIST', target: null, title: '由專員確認處理方式', description: '車輛事故的保障與處理方式需要專員確認，NAVI 會先整理好你的資訊。' },
-    steps: ['記下事故日期、地點與相關人員', '拍下現場與車損照片', '由專員確認保障與後續處理'],
-  },
   payment_method_change: {
     title: '更改繳費方式',
     stages: ['需求理解', '服務辨識', '保單資訊', '身分確認', '前往服務'],

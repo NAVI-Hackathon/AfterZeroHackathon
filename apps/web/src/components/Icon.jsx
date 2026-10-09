@@ -10,7 +10,6 @@ const paths = {
   spark:'m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z',
   document:'M14 3H5v18h14V8l-5-5Zm0 0v5h5M8 12h8M8 16h6',
   clock:'M12 8v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
-  car:'m5 11 2-6h10l2 6M4 11h16v7H4v-7Zm2 7v3m12-3v3M7 14h2m6 0h2',
   card:'M3 5h18v14H3V5Zm0 5h18M6 15h4',
   headset:'M4 14v-3a8 8 0 0 1 16 0v3M4 12H2v7h4v-7H4Zm16 0h2v7h-4v-7h2Zm0 7c0 3-4 3-8 3',
   info:'M12 11v6m0-10v1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',

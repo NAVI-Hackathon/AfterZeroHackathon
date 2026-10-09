@@ -8,7 +8,6 @@ import { fadeUp, staggerChildren, transition } from '../../motion/tokens.js';
 
 const scenarios = [
   { id: 'hospital', icon: 'medical', label: '我住院了，想申請理賠', text: DEMO_STORY },
-  { id: 'car', icon: 'car', label: '我發生車禍了', text: '我今天早上開車發生擦撞，想知道接下來要準備什麼。' },
   { id: 'payment', icon: 'card', label: '我想更改繳費方式', text: '我想把保單的繳費方式改成信用卡扣款，要從哪裡開始？' },
 ];
 
