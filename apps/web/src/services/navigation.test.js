@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createMockAdapter } from './adapters.js';
 import { DEMO_STORY } from '../mocks/hospitalClaim.js';
 import { NavigationTargetSchema } from '../../../../shared/journey.js';
+import { knowledgeEntries } from '../domain/knowledge.js';
 import raw from '../../../../data/cardif_seed_data.json' with { type: 'json' };
 
 // Paths that exist in apps/mock-site, derived from its app/ directory: route groups "(…)" and private "_…" folders add no segment.
@@ -48,4 +49,31 @@ test('every claim channel offers a destination and the partner channel reflects 
     assert.ok(channel.notes.length > 0);
   }
   assert.deepEqual(journey.claimContext.reminders.map(r => /10日內|30萬|診斷書/.test(r)), [true, true, true]);
+});
+
+// Each page's source decides which anchors it renders; check every knowledge answer against it.
+const pageSource = path => readFileSync(new URL(`(site)${path === '/' ? '' : path}/page.tsx`, mockSiteApp), 'utf8');
+const formsPage = pageSource('/services/forms');
+const versionedForms = new Set(JSON.parse(formsPage.match(/VERSIONED_FORMS = new Set\((\[[^\]]*\])\)/)[1]));
+const claimSections = [...formsPage.matchAll(/prefix: "([^"]+)"/g)].map(m => m[1]);
+
+test('every knowledge answer leads to a page and anchor the mock site renders', () => {
+  for (const entry of knowledgeEntries) {
+    const { path, anchor, source } = NavigationTargetSchema.parse(entry.destination);
+    assert.ok(MOCK_SITE_PATHS.has(path), `${entry.id} → ${path}`);
+    assert.match(source.url, /^https:\/\/life\.cardif\.com\.tw\//);
+    const page = pageSource(path);
+    const [, id] = entry.id.split(/:(.*)/);
+    if (entry.type === 'service') {
+      const service = raw.services.find(s => s.id === id);
+      assert.ok(page.includes(`getService("${id}")`) || page.includes(`servicesByCategory("${service.category}")`), `${entry.id} is not rendered on ${path}`);
+      assert.equal(anchor, `service-${id.replace(/[_.]+/g, '-')}`);
+    } else if (entry.type === 'form') {
+      if (id.startsWith('claim_')) assert.ok(claimSections.some(prefix => id.startsWith(prefix)), `${entry.id} has no section`);
+      assert.equal(anchor.endsWith('-investment'), versionedForms.has(id), entry.id);
+    } else {
+      const template = { faq: 'faqTourId', claim_documents: '`claim-doc-${index + 1}`', claim_rule: '`claim-rule-${index + 1}`' }[entry.type];
+      assert.ok(page.includes(template), `${entry.id}: ${path} does not render ${template}`);
+    }
+  }
 });
