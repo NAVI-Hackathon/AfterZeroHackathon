@@ -5,13 +5,17 @@ import raw from '../../../../data/cardif_seed_data.json' with { type: 'json' };
 // curated copy of the public BNP Paribas Cardif Life site). Validated once at load.
 
 const StringList = z.array(z.string());
-const Service = z.object({ id: z.string(), name: z.string(), url: z.url(), channels: StringList, documents: StringList, notes: StringList, partner_hospitals: StringList.optional() });
+const Service = z.object({
+  id: z.string(), name: z.string(), category: z.string(), url: z.url(), channels: StringList, documents: StringList, notes: StringList,
+  apply_time: z.string().nullable().optional(), effective_time: z.string().nullable().optional(), requires_login: z.boolean().optional(),
+  online_available: z.string().nullable().optional(), related_forms: StringList.optional(), keywords: StringList.optional(), partner_hospitals: StringList.optional(),
+});
 const Seed = z.object({
   meta: z.object({ crawled: z.iso.date() }),
   services: z.array(Service),
   claim_document_requirements: z.record(z.string(), StringList),
   claim_general_rules: StringList,
-  forms: z.array(z.object({ id: z.string(), name: z.string() })),
+  forms: z.array(z.object({ id: z.string(), name: z.string(), note: z.string().optional() })),
   faq: z.array(z.object({ q: z.string(), a: z.string(), source: z.url() })),
   contacts: z.object({ hotline: z.string() }),
 });
@@ -29,6 +33,12 @@ const pick = (list, text) => {
 };
 
 export const retrievedAt = seed.meta.crawled;
+/** Read-only views of the validated data file, for the knowledge index (domain/knowledge.js). */
+export const seedServices = seed.services;
+export const seedForms = seed.forms;
+export const seedFaq = seed.faq;
+export const seedClaimDocuments = seed.claim_document_requirements;
+export const seedClaimRules = seed.claim_general_rules;
 export const hotline = seed.contacts.hotline;
 export const claimByMail = service('claim_by_mail');
 export const hospitalUpload = service('claim_hospital_upload');
@@ -56,11 +66,25 @@ export const reminders = {
 export const claimApplicationForm = seed.forms.find(f => f.id === 'claim_1.1.1');
 export const claimFaq = seed.faq.filter(f => f.source === claimByMail.url);
 
+export const FORMS_PAGE_URL = 'https://life.cardif.com.tw/zh/a311';
+
 export const pageTitles = {
   [claimByMail.url]: '理賠程序介紹',
-  'https://life.cardif.com.tw/zh/a311': '常用表單下載',
+  [FORMS_PAGE_URL]: '常用表單下載',
   [paymentChange.url]: '保單變更',
+  'https://life.cardif.com.tw/zh/a313': '保單借款',
+  'https://life.cardif.com.tw/zh/f8': '網路保險服務',
 };
+
+// Official page → mock-site page (same mapping as apps/mock-site/components/site/routes.ts).
+const SITE_PATHS = {
+  'https://life.cardif.com.tw/zh/a311': '/services/forms',
+  'https://life.cardif.com.tw/zh/a312': '/services/policy-change',
+  'https://life.cardif.com.tw/zh/a313': '/services/policy-loan',
+  'https://life.cardif.com.tw/zh/a314': '/services/claims',
+  'https://life.cardif.com.tw/zh/f8': '/services/online',
+};
+export const sitePathFor = officialUrl => SITE_PATHS[officialUrl] ?? null;
 
 export function officialSource(url) {
   return { url, title: pageTitles[url] ?? '法國巴黎人壽官網', retrievedAt };
