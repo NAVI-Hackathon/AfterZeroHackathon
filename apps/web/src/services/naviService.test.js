@@ -85,6 +85,9 @@ test('payment change opens a basic journey; car accidents (not a BNP Paribas Car
   assert.equal(car.understanding.meta.outcome, 'clarification');
   const payment = await fast(memoryStorage()).analyze('我想更改保單的繳費方式');
   assert.equal(payment.snapshot.journey.nextAction.destination.path, '/services/policy-change');
+  const kept = await fast(memoryStorage()).analyze('我想更改保單的繳費方式', { openJourney: kind => kind === 'hospital' });
+  assert.equal(kept.snapshot, null);
+  assert.equal(kept.kind, 'payment_method_change');
   const vague = await fast(memoryStorage()).analyze('你好');
   assert.equal(vague.snapshot, null);
   assert.equal(vague.understanding.meta.outcome, 'clarification');

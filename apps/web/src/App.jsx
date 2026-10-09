@@ -10,6 +10,7 @@ import { useHostBridge } from './hooks/useHostBridge.js';
 import { naviMessage, originOf } from '../../../shared/embed.js';
 import { analysisErrors } from './services/intelligence.js';
 import { serviceLabel } from './domain/intelligence.js';
+import { searchKnowledge } from './domain/knowledge.js';
 import { documentSpecs } from './mocks/hospitalClaim.js';
 
 const embedded = isEmbedPath(location.pathname);
@@ -24,16 +25,22 @@ const errorCopy = {
   AI_PROVIDER_ERROR: ['分析服務暫時無法回應', '請稍後再試一次，或改用示範模式。'],
 };
 
-function feedbackFor(understanding) {
+function feedbackFor(understanding, hotline) {
   if (understanding.meta.outcome === 'clarification') {
     return { kind: 'clarification', title: '我還需要一些資訊', body: '可以再多描述一點嗎？例如發生了什麼事、你想處理哪一件事。' };
   }
   return {
     kind: 'preview',
     title: serviceLabel(understanding.data.serviceType),
-    body: `${understanding.data.summary} 這項服務目前不在 NAVI 原型的服務範圍內，你可以重新描述，或由專員協助。`,
+    body: `${understanding.data.summary} 官網資料中沒有找到這項需求的說明，你可以換個方式描述，或洽客服專線 ${hotline}。`,
   };
 }
+
+// NAVI only quotes the official site: no product advice, no judging whether a claim will be paid.
+const guardFeedback = hotline => ({
+  kind: 'guard', title: '這個問題需要由專人協助',
+  body: `NAVI 只根據法國巴黎人壽官網公開資料提供說明，不提供投保建議，也無法判斷能否理賠或理賠金額。請洽客服專線 ${hotline}。`,
+});
 
 function wait(ms, signal) {
   return new Promise((resolve, reject) => {
@@ -101,18 +108,27 @@ export default function App() {
     const ctl = new AbortController();
     analysisCtl.current = ctl;
     setFeedback(null);
+    const showFeedback = next => {
+      setAnalysisPhase(null);
+      setFeedback(next);
+      requestAnimationFrame(() => document.getElementById('feedback-title')?.focus());
+    };
+    // Official-site answers are searched locally; refused questions never reach the AI.
+    const knowledge = searchKnowledge(text);
+    if (knowledge.status === 'out_of_scope') { showFeedback(guardFeedback(knowledge.hotline)); return; }
+    const answered = knowledge.status === 'answered';
     setAnalysisPhase(0);
     const step = reduced ? 0 : 640;
     const startedAt = performance.now();
     try {
-      const result = await service.analyze(text, { signal: ctl.signal });
+      // 住院醫療理賠 opens the full journey; other services show the official answers when there are any.
+      const openJourney = kind => kind === 'hospital' || !answered;
+      const result = await service.analyze(text, { signal: ctl.signal, openJourney });
       await wait(step + 160 - (performance.now() - startedAt), ctl.signal);
       setAnalysisPhase(1);
       await wait(step, ctl.signal);
       if (!result.snapshot) {
-        setAnalysisPhase(null);
-        setFeedback(feedbackFor(result.understanding));
-        requestAnimationFrame(() => document.getElementById('feedback-title')?.focus());
+        showFeedback(answered ? { kind: 'answers', result: knowledge } : feedbackFor(result.understanding, knowledge.hotline));
         return;
       }
       setAnalysisPhase(2);
@@ -124,10 +140,10 @@ export default function App() {
       goWorkspace();
     } catch (error) {
       if (ctl.signal.aborted) return;
-      setAnalysisPhase(null);
+      // The official answers do not depend on the AI service, so they still help when it is down.
+      if (answered) { showFeedback({ kind: 'answers', result: knowledge, notice: 'AI 分析暫時無法使用，以下是官網資料中的相關說明。' }); return; }
       const [title, body] = errorCopy[error?.code] ?? errorCopy.DEFAULT;
-      setFeedback({ kind: 'error', title, body });
-      requestAnimationFrame(() => document.getElementById('feedback-title')?.focus());
+      showFeedback({ kind: 'error', title, body });
     }
   }
 
@@ -252,7 +268,7 @@ export default function App() {
             ) : (
               <Landing
                 key={`landing-${landingKey}`} mode={mode} analysisPhase={analysisPhase} feedback={feedback}
-                onStart={start} onRetry={start} onClearFeedback={() => setFeedback(null)}
+                onStart={start} onRetry={start} onClearFeedback={() => setFeedback(null)} onNavigate={navigate}
               />
             )}
           </AnimatePresence>

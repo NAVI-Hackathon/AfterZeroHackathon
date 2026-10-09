@@ -43,6 +43,11 @@ test('everyday questions find the matching official item', () => {
     ['客服電話幾號', 'faq:10'],
     ['住院要準備什麼文件', 'claim-doc:2'],
     ['癌症理賠需要哪些文件', 'claim-doc:3'],
+    // Suggested questions in the assistant panel and landing scenarios.
+    ['醫起通是什麼？', 'service:claim_hospital_upload'],
+    ['線上申請還要寄正本嗎？', 'service:claim_union_chain'],
+    ['我最近搬家了，保單上的地址要怎麼改？', 'service:change_address'],
+    ['我想用保單借錢週轉，要準備什麼？', 'service:policy_loan'],
   ];
   for (const [query, expected] of cases) assert.equal(top(query), expected, query);
 });

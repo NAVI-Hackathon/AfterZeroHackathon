@@ -3,17 +3,20 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import Icon from '../Icon.jsx';
 import AnalysisSequence from './AnalysisSequence.jsx';
 import AnalysisFeedback from './AnalysisFeedback.jsx';
+import KnowledgeAnswers from '../knowledge/KnowledgeAnswers.jsx';
 import { DEMO_STORY } from '../../mocks/hospitalClaim.js';
 import { fadeUp, staggerChildren, transition } from '../../motion/tokens.js';
 
 const scenarios = [
   { id: 'hospital', icon: 'medical', label: '我住院了，想申請理賠', text: DEMO_STORY },
   { id: 'payment', icon: 'card', label: '我想更改繳費方式', text: '我想把保單的繳費方式改成信用卡扣款，要從哪裡開始？' },
+  { id: 'address', icon: 'document', label: '我搬家了，想改地址', text: '我最近搬家了，保單上的地址要怎麼改？' },
+  { id: 'loan', icon: 'bank', label: '想用保單借錢', text: '我想用保單借錢週轉，要準備什麼？' },
 ];
 
 const MAX_LENGTH = 2000;
 
-export default function Landing({ analysisPhase, feedback, onStart, onRetry, onClearFeedback, mode, ref }) {
+export default function Landing({ analysisPhase, feedback, onStart, onRetry, onClearFeedback, onNavigate, mode, ref }) {
   const [text, setText] = useState('');
   const [error, setError] = useState('');
   const textarea = useRef(null);
@@ -95,6 +98,11 @@ export default function Landing({ analysisPhase, feedback, onStart, onRetry, onC
           <AnimatePresence mode="popLayout" initial={false}>
             {analysing ? (
               <AnalysisSequence key="analysis" phase={analysisPhase} />
+            ) : feedback?.kind === 'answers' ? (
+              <KnowledgeAnswers
+                key="answers" result={feedback.result} notice={feedback.notice} onNavigate={onNavigate}
+                onEdit={() => { onClearFeedback(); textarea.current?.focus(); }}
+              />
             ) : feedback ? (
               <AnalysisFeedback
                 key={`feedback-${feedback.kind}`} feedback={feedback} mode={mode}

@@ -37,7 +37,7 @@ function serviceEntry(service) {
   ].filter(([, items]) => items.length > 0).map(([label, items]) => ({ label, items }));
   return {
     id: `service:${service.id}`, type: 'service', title: service.name, category: service.category,
-    summary: service.channels.length > 0 ? `辦理方式：${service.channels.join('、')}。` : service.notes[0] ?? '',
+    summary: '', // the detail lists (辦理方式、應備文件…) are the answer
     details, requiresLogin: Boolean(service.requires_login),
     destination: destination('page', path, `service-${kebab(service.id)}`, `查看${service.name}`, service.url),
     relatedIds: (service.related_forms ?? []).map(id => `form:${id}`),
@@ -48,7 +48,7 @@ function serviceEntry(service) {
 function formEntry(form) {
   return {
     id: `form:${form.id}`, type: 'form', title: form.name, category: form.id.startsWith('claim_') ? '理賠服務表單' : '保全服務表單',
-    summary: form.note ?? `可在模擬官網「常用表單下載」頁找到這份表單。`,
+    summary: form.note ?? `可在「常用表單下載」頁找到這份表單。`,
     details: [], requiresLogin: false,
     destination: destination('form', '/services/forms', formAnchor(form.id), `下載${form.name}`, FORMS_PAGE_URL),
     relatedIds: seedServices.filter(s => s.related_forms?.includes(form.id)).map(s => `service:${s.id}`),
@@ -161,27 +161,46 @@ function scoreEntry(doc, query, queryTokens) {
   return { score, coverage: total ? matched / total : 0, specific: phrase || distinctive >= MIN_DISTINCTIVE };
 }
 
+/** The detail lines of an entry that share the most pieces with the question (e.g. 正本 → the 10-day originals rule). */
+function relevantLines(entry, queryTokens, max = 3) {
+  return entry.details
+    .flatMap(detail => detail.items)
+    .map(line => {
+      const pieces = tokens(line);
+      let score = 0;
+      for (const t of queryTokens) if (pieces.has(t)) score += idf(t);
+      return { line, score };
+    })
+    .filter(r => r.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, max)
+    .map(r => r.line);
+}
+
 /**
  * Search the official-site knowledge.
- * @returns {{ status: 'answered'|'not_found'|'out_of_scope', results: object[], related: object[], hotline: string }}
+ * `highlights[entryId]` lists the entry's lines most related to the question, for short answers.
+ * @returns {{ status: 'answered'|'not_found'|'out_of_scope', results: object[], related: object[], highlights: Record<string, string[]>, hotline: string }}
  */
 export function searchKnowledge(query, { limit = 3 } = {}) {
   const text = String(query ?? '').trim().slice(0, 300);
-  if (ADVICE.test(text)) return { status: 'out_of_scope', results: [], related: [], hotline };
+  const none = status => ({ status, results: [], related: [], highlights: {}, hotline });
+  if (ADVICE.test(text)) return none('out_of_scope');
   const queryTokens = tokens(text);
-  if (queryTokens.size === 0) return { status: 'not_found', results: [], related: [], hotline };
+  if (queryTokens.size === 0) return none('not_found');
 
   const ranked = indexed
     .map(doc => ({ entry: doc.entry, ...scoreEntry(doc, text, queryTokens) }))
     .filter(r => r.specific && r.score >= MIN_SCORE && r.coverage >= MIN_COVERAGE)
     .sort((a, b) => b.score - a.score);
-  if (ranked.length === 0) return { status: 'not_found', results: [], related: [], hotline };
+  if (ranked.length === 0) return none('not_found');
 
   const best = ranked[0].score;
   const results = ranked.filter(r => r.score >= best * 0.6).slice(0, limit).map(r => r.entry);
   const shown = new Set(results.map(r => r.id));
   const related = results.flatMap(r => r.relatedIds).filter(id => !shown.has(id) && byId.has(id) && (shown.add(id), true)).slice(0, 3).map(id => byId.get(id));
-  return { status: 'answered', results, related, hotline };
+  const highlights = Object.fromEntries(results.map(r => [r.id, relevantLines(r, queryTokens)]));
+  return { status: 'answered', results, related, highlights, hotline };
 }
 
 export const getKnowledgeEntry = id => byId.get(id) ?? null;

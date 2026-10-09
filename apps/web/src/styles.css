@@ -502,3 +502,34 @@ button:active:not(:disabled) { transform: scale(0.98); }
 .navigate-link:hover:not(:disabled) { color: var(--color-text); }
 .next-action-buttons .navigate-link { justify-content: center; }
 .proceed .button-secondary { margin-bottom: 8px; }
+
+/* Official-site answers (knowledge search) */
+.knowledge-answers { max-width: 680px; margin: 0 auto; text-align: left; }
+.knowledge-header h2 { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; }
+.knowledge-header h2:focus-visible { outline: none; }
+.knowledge-header svg { color: var(--color-accent); }
+.knowledge-notice { margin-top: 6px; font-size: 11px; color: var(--color-warning); }
+.answer-card { margin-top: 12px; padding: 16px 18px; border: var(--border); border-radius: var(--radius); background: var(--color-surface); }
+.answer-card-compact { margin-top: 8px; padding: 12px 14px; }
+.answer-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.answer-title { margin-top: 8px; font-size: 14px; font-weight: 500; color: var(--color-text); }
+.answer-summary { margin-top: 6px; font-size: 12px; line-height: 1.9; color: var(--color-text-secondary); }
+.answer-detail { margin-top: 10px; }
+.answer-detail-label { font-size: 11px; color: var(--color-text-muted); }
+.answer-detail ul { margin-top: 4px; padding-left: 18px; list-style: disc; font-size: 12px; line-height: 1.8; color: var(--color-text-secondary); }
+.answer-card .navigate-link { margin-top: 8px; text-align: left; }
+.answer-card .navigate-link svg { flex: none; }
+.answer-card .qa-source { display: block; line-height: 1.7; }
+.answer-card .qa-source svg { display: inline-block; margin-right: 4px; vertical-align: -2px; }
+.answer-card .qa-source a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.knowledge-more, .knowledge-related { margin-top: 16px; }
+.answer-disclosure { border-bottom: var(--border); }
+.answer-disclosure > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; font-size: 12px; color: var(--color-text-secondary); cursor: pointer; list-style: none; }
+.answer-disclosure > summary::-webkit-details-marker { display: none; }
+.answer-disclosure > summary:hover { color: var(--color-text); }
+.answer-disclosure[open] > summary .summary-chevron { transform: rotate(90deg); }
+.answer-disclosure .answer-card { margin: 0 0 12px; }
+.knowledge-related li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 4px 0; font-size: 12px; color: var(--color-text-secondary); }
+.knowledge-related .navigate-link { min-height: 32px; }
+.knowledge-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; font-size: 11px; color: var(--color-text-muted); }
+.knowledge-footer p { flex: 1 1 280px; }

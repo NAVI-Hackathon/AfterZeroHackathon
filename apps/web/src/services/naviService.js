@@ -45,11 +45,13 @@ export function createJourneyService({ mode, understand, storage, storageKey, do
       try { session = restoreSession(storage?.getItem(storageKey) ?? 'null'); } catch { session = null; }
       return session ? toSnapshot(session) : null;
     },
-    async analyze(message, { signal } = {}) {
+    /** `openJourney(kind)` lets the caller keep a recognised service on the landing page (e.g. to show official answers). */
+    async analyze(message, { signal, openJourney = () => true } = {}) {
       const understanding = await understand(message, { signal });
       const candidate = createSession(message, understanding, provider);
-      if (!opensJourney(understanding, journeyKind(candidate))) return { understanding, snapshot: null };
-      return { understanding, snapshot: commit(candidate) };
+      const kind = journeyKind(candidate);
+      if (!opensJourney(understanding, kind) || !openJourney(kind)) return { understanding, kind, snapshot: null };
+      return { understanding, kind, snapshot: commit(candidate) };
     },
     async uploadDocument(type, { file = null, sample = false } = {}, { signal } = {}) {
       const current = requireSession();
